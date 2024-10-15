@@ -38,12 +38,12 @@ lval_t eval_op(lval_t x, char* op, lval_t y) {
   if (strcmp(op, "+") == 0) return lval_eval(x.num + y.num, LVAL_NUM);
   if (strcmp(op, "-") == 0) return lval_eval(x.num - y.num, LVAL_NUM);
   if (strcmp(op, "*") == 0) return lval_eval(x.num * y.num, LVAL_NUM);
-  if (strcmp(op, "%") == 0) return lval_eval(x.num % y.num, LVAL_NUM);
+  if (strcmp(op, "%") == 0) return lval_eval(fmod(x.num, y.num), LVAL_NUM);
   if (strcmp(op, "^") == 0) return lval_eval(pow(x.num, y.num), LVAL_NUM);
-  if (strcmp(op, "min") == 0) return lval_eval(min(x.num, y.num), LVAL_NUM);
-  if (strcmp(op, "max") == 0) return lval_eval(max(x.num, y.num), LVAL_NUM);
+  if (strcmp(op, "min") == 0) return lval_eval(fmin(x.num, y.num), LVAL_NUM);
+  if (strcmp(op, "max") == 0) return lval_eval(fmax(x.num, y.num), LVAL_NUM);
   if (strcmp(op, "/") == 0) {
-    return y.num == 0
+    return y.num == 0.0
       ? lval_eval(LERR_DIV_ZERO, LVAL_ERR)
       : lval_eval(x.num / y.num, LVAL_NUM);
   }
@@ -54,7 +54,7 @@ lval_t eval_op(lval_t x, char* op, lval_t y) {
 lval_t eval_ast(mpc_ast_t *ast) {
   if (strstr(ast->tag, "number")) {
     errno = 0;
-    long x = strtol(ast->contents, NULL, 10);
+    double x = strtof(ast->contents, NULL);
     return errno != ERANGE ? lval_eval(x, LVAL_NUM) : lval_eval(LERR_BAD_NUM, LVAL_ERR);
   }
 
@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
   mpc_parser_t *language = mpc_new("language");
 
   mpca_lang(MPCA_LANG_DEFAULT,
-    "number   : /-?[0-9]+/ ;"
+    "number   : /-?[0-9]+['.']?[0-9]*/ ;"
     "operator : '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ;"
     "expr     : <number> | '(' <operator> <expr>+ ')' ;"
     "language : /^/ <operator> <expr>+ /$/ ;",

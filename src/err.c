@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include "err.h"
 
-lval_t lval_eval(long x, LVAL_e type) {
+lval_t lval_eval(double x, LVAL_e type) {
   lval_t v;
   switch (type) {
     case LVAL_ERR: 
@@ -19,7 +19,7 @@ lval_t lval_eval(long x, LVAL_e type) {
 
 void lval_print(lval_t v) {
   switch (v.type) {
-    case LVAL_NUM: printf("%li", v.num); break;
+    case LVAL_NUM: printf("%f", v.num); break;
     case LVAL_ERR:
       switch (v.err) {
         case LERR_BAD_OP: printf("ERROR: Invalid operator!"); break;
