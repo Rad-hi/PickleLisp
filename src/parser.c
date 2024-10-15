@@ -35,27 +35,27 @@ lval_t eval_op(lval_t x, char* op, lval_t y) {
   if (x.type == LVAL_ERR) return x;
   if (y.type == LVAL_ERR) return y;
 
-  if (strcmp(op, "+") == 0) return lval_eval(x.num + y.num, false);
-  if (strcmp(op, "-") == 0) return lval_eval(x.num - y.num, false);
-  if (strcmp(op, "*") == 0) return lval_eval(x.num * y.num, false);
-  if (strcmp(op, "%") == 0) return lval_eval(x.num % y.num, false);
-  if (strcmp(op, "^") == 0) return lval_eval(pow(x.num, y.num), false);
-  if (strcmp(op, "min") == 0) return lval_eval(min(x.num, y.num), false);
-  if (strcmp(op, "max") == 0) return lval_eval(max(x.num, y.num), false);
+  if (strcmp(op, "+") == 0) return lval_eval(x.num + y.num, LVAL_NUM);
+  if (strcmp(op, "-") == 0) return lval_eval(x.num - y.num, LVAL_NUM);
+  if (strcmp(op, "*") == 0) return lval_eval(x.num * y.num, LVAL_NUM);
+  if (strcmp(op, "%") == 0) return lval_eval(x.num % y.num, LVAL_NUM);
+  if (strcmp(op, "^") == 0) return lval_eval(pow(x.num, y.num), LVAL_NUM);
+  if (strcmp(op, "min") == 0) return lval_eval(min(x.num, y.num), LVAL_NUM);
+  if (strcmp(op, "max") == 0) return lval_eval(max(x.num, y.num), LVAL_NUM);
   if (strcmp(op, "/") == 0) {
     return y.num == 0
-      ? lval_eval(LERR_DIV_ZERO, true)
-      : lval_eval(x.num / y.num, false);
+      ? lval_eval(LERR_DIV_ZERO, LVAL_ERR)
+      : lval_eval(x.num / y.num, LVAL_NUM);
   }
 
-  return lval_eval(LERR_BAD_OP, true);
+  return lval_eval(LERR_BAD_OP, LVAL_ERR);
 }
 
 lval_t eval_ast(mpc_ast_t *ast) {
   if (strstr(ast->tag, "number")) {
     errno = 0;
     long x = strtol(ast->contents, NULL, 10);
-    return errno != ERANGE ? lval_eval(x, false) : lval_eval(LERR_BAD_NUM, true);
+    return errno != ERANGE ? lval_eval(x, LVAL_NUM) : lval_eval(LERR_BAD_NUM, LVAL_ERR);
   }
 
   // children[0] == '('

@@ -2,14 +2,17 @@
 #include <stdbool.h>
 #include "err.h"
 
-lval_t lval_eval(long x, bool err) {
+lval_t lval_eval(long x, LVAL_e type) {
   lval_t v;
-  if (err) {
-    v.err = x;
-    v.type = LVAL_ERR;
-  } else {
-    v.num = x;
-    v.type = LVAL_NUM;
+  switch (type) {
+    case LVAL_ERR: 
+      v.err = x;
+      v.type = LVAL_ERR;
+      break;
+    case LVAL_NUM:
+      v.num = x;
+      v.type = LVAL_NUM;
+      break;
   }
   return v;
 }
