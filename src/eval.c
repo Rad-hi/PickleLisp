@@ -29,8 +29,8 @@ void lval_print(Lval_t v) {
     case LVAL_DECIMAL: printf("%f", v.num.f_num); break;
     case LVAL_ERR:
       switch (v.err) {
-        case LERR_BAD_OP: printf("ERROR: Invalid operator!"); break;
-        case LERR_BAD_NUM: printf("ERROR: Invalid number!"); break;
+        case LERR_BAD_OP: printf("ERROR: Unknown operator!"); break;
+        case LERR_BAD_NUM: printf("ERROR: Invalid input number!"); break;
         case LERR_DIV_ZERO: printf("ERROR: Division by Zero!"); break;
       }
       break;
@@ -61,9 +61,13 @@ Lval_t eval_op(Lval_t x, char* op, Lval_t y) {
     if (strcmp(op, "-") == 0) return lval_double(x.num.f_num - y.num.f_num);
     if (strcmp(op, "*") == 0) return lval_double(x.num.f_num * y.num.f_num);
     if (strcmp(op, "^") == 0) return lval_double(pow(x.num.f_num, y.num.f_num));
-    if (strcmp(op, "%") == 0) return lval_double(fmod(x.num.f_num, y.num.f_num));
     if (strcmp(op, "min") == 0) return lval_double(fmin(x.num.f_num, y.num.f_num));
     if (strcmp(op, "max") == 0) return lval_double(fmax(x.num.f_num, y.num.f_num));
+    if (strcmp(op, "%") == 0) {
+      return y.num.f_num == 0.0
+        ? lval_err(LERR_BAD_NUM)
+        : lval_double(fmod(x.num.f_num, y.num.f_num));
+    }
     if (strcmp(op, "/") == 0) {
       return y.num.f_num == 0.0
         ? lval_err(LERR_DIV_ZERO)
@@ -74,9 +78,13 @@ Lval_t eval_op(Lval_t x, char* op, Lval_t y) {
     if (strcmp(op, "-") == 0) return lval_long(x.num.li_num - y.num.li_num);
     if (strcmp(op, "*") == 0) return lval_long(x.num.li_num * y.num.li_num);
     if (strcmp(op, "^") == 0) return lval_long((long)pow(x.num.li_num, y.num.li_num));
-    if (strcmp(op, "%") == 0) return lval_long(x.num.li_num % y.num.li_num);
     if (strcmp(op, "min") == 0) return lval_long(min(x.num.li_num, y.num.li_num));
     if (strcmp(op, "max") == 0) return lval_long(max(x.num.li_num, y.num.li_num));
+    if (strcmp(op, "%") == 0) {
+      return y.num.li_num == 0
+        ? lval_err(LERR_BAD_NUM)
+        : lval_long(x.num.li_num % y.num.li_num);
+    }
     if (strcmp(op, "/") == 0) {
       return y.num.li_num == 0
         ? lval_err(LERR_DIV_ZERO)
