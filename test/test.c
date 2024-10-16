@@ -126,7 +126,7 @@ static void test_min_max(mpc_parser_t* language) {
 
   char* test_name = "min max";
   char* test_statement = "min 69 (max 666 420)";
-  Lval_t expected = get_lval_long(694);
+  Lval_t expected = get_lval_long(69);
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
