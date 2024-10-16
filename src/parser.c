@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "grammar.h"
 #include "eval.h"
 #include "mpc.h"
 
@@ -24,29 +25,13 @@
   #include <editline/history.h>
 #endif // _WIN32
 
-#define REPL_IN    "8=> "
-#define LANG_NAME  "PickleLisp"
-#define PRINT_AST  0
-
+#define REPL_IN      "8=> "
+#define LANG_NAME    "PickleLisp"
+#define PRINT_AST    0
 
 int main(int argc, char** argv) {
 
-  mpc_parser_t *integer = mpc_new("integer");
-  mpc_parser_t *decimal = mpc_new("decimal");
-  mpc_parser_t *number = mpc_new("number");
-  mpc_parser_t *operator = mpc_new("operator");
-  mpc_parser_t *expr = mpc_new("expr");
-  mpc_parser_t *language = mpc_new("language");
-
-  mpca_lang(MPCA_LANG_DEFAULT,
-    "integer  : /-?[0-9]+/ ;"
-    "decimal  : /-?[0-9]*['.'][0-9]*[fF]?/ ;"
-    "number   : <decimal> | <integer> ;"
-    "operator : '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ;"
-    "expr     : <number> | '(' <operator> <expr>+ ')' ;"
-    "language : /^/ <operator> <expr>+ /$/ ;",
-    integer, decimal, number, operator, expr, language
-  );
+  mpc_parser_t* language = create_lang();
 
   puts(LANG_NAME" Version 666.69.420");
   puts("Press Ctrl+C to Exit\n");
@@ -71,7 +56,7 @@ int main(int argc, char** argv) {
     free(buf);
   }
 
-  mpc_cleanup(6, integer, decimal, number, operator, expr, language);
+  cleanup();
 
   return 0;
 }
