@@ -12,7 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt install libedit-dev
+        run: |
+          sudo apt install libedit-dev
+          git clone https://github.com/orangeduck/mpc.git
       - name: Build
         run: |
           cd src/
