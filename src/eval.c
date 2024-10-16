@@ -73,7 +73,7 @@ Lval_t eval_op(Lval_t x, char* op, Lval_t y) {
     if (strcmp(op, "+") == 0) return lval_long(x.num.li_num + y.num.li_num);
     if (strcmp(op, "-") == 0) return lval_long(x.num.li_num - y.num.li_num);
     if (strcmp(op, "*") == 0) return lval_long(x.num.li_num * y.num.li_num);
-    if (strcmp(op, "^") == 0) return lval_long(pow(x.num.li_num, y.num.li_num));
+    if (strcmp(op, "^") == 0) return lval_long((long)pow(x.num.li_num, y.num.li_num));
     if (strcmp(op, "%") == 0) return lval_long(x.num.li_num % y.num.li_num);
     if (strcmp(op, "min") == 0) return lval_long(min(x.num.li_num, y.num.li_num));
     if (strcmp(op, "max") == 0) return lval_long(max(x.num.li_num, y.num.li_num));
