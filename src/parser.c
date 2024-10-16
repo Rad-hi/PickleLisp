@@ -28,9 +28,6 @@
 #define LANG_NAME  "PickleLisp"
 #define PRINT_AST  0
 
-#define min(a, b)  ((a) > (b) ? (b) : (a))
-#define max(a, b)  ((a) > (b) ? (a) : (b))
-
 
 int main(int argc, char** argv) {
 
@@ -44,7 +41,7 @@ int main(int argc, char** argv) {
   mpca_lang(MPCA_LANG_DEFAULT,
     "integer  : /-?[0-9]+/ ;"
     "decimal  : /-?[0-9]*['.'][0-9]*[fF]?/ ;"
-    "number   : <integer> | <decimal> ;"
+    "number   : <decimal> | <integer> ;"
     "operator : '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ;"
     "expr     : <number> | '(' <operator> <expr>+ ')' ;"
     "language : /^/ <operator> <expr>+ /$/ ;",

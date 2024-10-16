@@ -2,24 +2,31 @@
 #include <stdbool.h>
 #include "eval.h"
 
-Lval_t lval_eval(double x, LVAL_e type) {
-  Lval_t v;
-  switch (type) {
-    case LVAL_ERR: 
-      v.err = x;
-      v.type = LVAL_ERR;
-      break;
-    case LVAL_NUM:
-      v.num = x;
-      v.type = LVAL_NUM;
-      break;
-  }
-  return v;
+static Lval_t lval_err(LERR_t x) {
+  return (Lval_t){
+    .type = LVAL_ERR,
+    .err = x
+  };
+}
+
+static Lval_t lval_long(long x) {
+  return (Lval_t){
+    .type = LVAL_INTEGER,
+    .num.li_num = x
+  };
+}
+
+static Lval_t lval_double(double x) {
+  return (Lval_t){
+    .type = LVAL_DECIMAL,
+    .num.f_num = x
+  };
 }
 
 void lval_print(Lval_t v) {
   switch (v.type) {
-    case LVAL_NUM: printf("%f", v.num); break;
+    case LVAL_INTEGER: printf("%li", v.num.li_num); break;
+    case LVAL_DECIMAL: printf("%f", v.num.f_num); break;
     case LVAL_ERR:
       switch (v.err) {
         case LERR_BAD_OP: printf("ERROR: Invalid operator!"); break;
@@ -30,33 +37,65 @@ void lval_print(Lval_t v) {
   }
 }
 
-void lval_println(Lval_t v) { lval_print(v); printf("\n"); }
+void lval_println(Lval_t v) {
+  lval_print(v); printf("\n"); 
+}
 
 Lval_t eval_op(Lval_t x, char* op, Lval_t y) {
   if (x.type == LVAL_ERR) return x;
-  if (y.type == LVAL_ERR) return y;
+  if (y.type == LVAL_ERR) return y;  
 
-  if (strcmp(op, "+") == 0) return lval_eval(x.num + y.num, LVAL_NUM);
-  if (strcmp(op, "-") == 0) return lval_eval(x.num - y.num, LVAL_NUM);
-  if (strcmp(op, "*") == 0) return lval_eval(x.num * y.num, LVAL_NUM);
-  if (strcmp(op, "%") == 0) return lval_eval(fmod(x.num, y.num), LVAL_NUM);
-  if (strcmp(op, "^") == 0) return lval_eval(pow(x.num, y.num), LVAL_NUM);
-  if (strcmp(op, "min") == 0) return lval_eval(fmin(x.num, y.num), LVAL_NUM);
-  if (strcmp(op, "max") == 0) return lval_eval(fmax(x.num, y.num), LVAL_NUM);
-  if (strcmp(op, "/") == 0) {
-    return y.num == 0.0
-      ? lval_eval(LERR_DIV_ZERO, LVAL_ERR)
-      : lval_eval(x.num / y.num, LVAL_NUM);
+  // if one of them is a decimal, we do decimal ops
+  if (x.type == LVAL_DECIMAL || y.type == LVAL_DECIMAL) {
+    
+    // since the `num` field is a union, only one value could exist at a time
+    // and accessing the other is UB (weird values), we need to transfer
+    // the data when we're trying to do `integer op decimal` operations
+    if (x.type == LVAL_DECIMAL && y.type != LVAL_DECIMAL) {
+      y.num.f_num = (double)y.num.li_num;
+    } else if (x.type != LVAL_DECIMAL && y.type == LVAL_DECIMAL) {
+      x.num.f_num = (double)x.num.li_num;
+    }
+
+    if (strcmp(op, "+") == 0) return lval_double(x.num.f_num + y.num.f_num);
+    if (strcmp(op, "-") == 0) return lval_double(x.num.f_num - y.num.f_num);
+    if (strcmp(op, "*") == 0) return lval_double(x.num.f_num * y.num.f_num);
+    if (strcmp(op, "^") == 0) return lval_double(pow(x.num.f_num, y.num.f_num));
+    if (strcmp(op, "%") == 0) return lval_double(fmod(x.num.f_num, y.num.f_num));
+    if (strcmp(op, "min") == 0) return lval_double(fmin(x.num.f_num, y.num.f_num));
+    if (strcmp(op, "max") == 0) return lval_double(fmax(x.num.f_num, y.num.f_num));
+    if (strcmp(op, "/") == 0) {
+      return y.num.f_num == 0.0
+        ? lval_err(LERR_DIV_ZERO)
+        : lval_double(x.num.f_num / y.num.f_num);
+    }
+  } else {
+    if (strcmp(op, "+") == 0) return lval_long(x.num.li_num + y.num.li_num);
+    if (strcmp(op, "-") == 0) return lval_long(x.num.li_num - y.num.li_num);
+    if (strcmp(op, "*") == 0) return lval_long(x.num.li_num * y.num.li_num);
+    if (strcmp(op, "^") == 0) return lval_long(pow(x.num.li_num, y.num.li_num));
+    if (strcmp(op, "%") == 0) return lval_long(x.num.li_num % y.num.li_num);
+    if (strcmp(op, "min") == 0) return lval_long(min(x.num.li_num, y.num.li_num));
+    if (strcmp(op, "max") == 0) return lval_long(max(x.num.li_num, y.num.li_num));
+    if (strcmp(op, "/") == 0) {
+      return y.num.li_num == 0
+        ? lval_err(LERR_DIV_ZERO)
+        : lval_long(x.num.li_num / y.num.li_num);
+    }
   }
 
-  return lval_eval(LERR_BAD_OP, LVAL_ERR);
+  return lval_err(LERR_BAD_OP);
 }
 
 Lval_t eval_ast(mpc_ast_t *ast) {
-  if (strstr(ast->tag, "number")) {
+  if (strstr(ast->tag, "integer")) {
+    errno = 0;
+    long x = strtol(ast->contents, NULL, 10);
+    return errno != ERANGE ? lval_long(x) : lval_err(LERR_BAD_NUM);
+  } else if (strstr(ast->tag, "decimal")) {
     errno = 0;
     double x = strtof(ast->contents, NULL);
-    return errno != ERANGE ? lval_eval(x, LVAL_NUM) : lval_eval(LERR_BAD_NUM, LVAL_ERR);
+    return errno != ERANGE ? lval_double(x) : lval_err(LERR_BAD_NUM);
   }
 
   // children[0] == '('
