@@ -1,4 +1,8 @@
 #pragma once
+#include <stdio.h>
+#include <stdbool.h>
+#include <assert.h>
+
 #include "mpc.h"
 
 #define min(a, b)  ((a) > (b) ? (b) : (a))
@@ -29,9 +33,9 @@ typedef struct Lval_t {
 } Lval_t;
 
 
+Lval_t* eval_ast(mpc_ast_t *ast);
+Lval_t* lval_eval(Lval_t* v);
 Lval_t* lval_read(mpc_ast_t* ast);
 void lval_del(Lval_t* v);
 void lval_print(Lval_t* v);
 void lval_println(Lval_t* v);
-// Lval_t eval_op(Lval_t x, char* op, Lval_t y);
-// Lval_t eval_ast(mpc_ast_t *ast);

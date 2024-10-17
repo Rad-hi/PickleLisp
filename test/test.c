@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "../src/grammar.h"
 #include "../src/eval.h"
@@ -10,10 +11,10 @@
 #define PRINT_VERDICT(cond, name)   printf("[%s] [Test %s]\n", (cond) ? "PASSED" : "FAILED", (name));
 
 
-static void assert_equal(Lval_t val, Lval_t expected, char* test_name) {
+static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
   switch (expected.type) {
     case LVAL_ERR: {
-      bool cond = val.err == expected.err;
+      bool cond = (bool)strstr(val->err, expected.err);
       PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
       if (!cond) exit(-1);
@@ -22,7 +23,7 @@ static void assert_equal(Lval_t val, Lval_t expected, char* test_name) {
     }
 
     case LVAL_INTEGER: {
-      bool cond = val.num.li_num == expected.num.li_num;
+      bool cond = val->num.li == expected.num.li;
       PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
       if (!cond) exit(-1);
@@ -31,34 +32,40 @@ static void assert_equal(Lval_t val, Lval_t expected, char* test_name) {
     }
 
     case LVAL_DECIMAL: {
-      bool cond = ALMOST_EQ(val.num.f_num, expected.num.f_num); 
+      bool cond = ALMOST_EQ(val->num.f, expected.num.f); 
       PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
       if (!cond) exit(-1);
 #endif
       break;
     }
+
+    case LVAL_SEXPR:
+      // TODO: handle this case
+    case LVAL_SYM:
+      // TODO: handle this case
+      break;
   }
 }
 
-static Lval_t get_lval_err(int value) {
+static Lval_t get_lval_err(char* msg) {
   return (Lval_t){
     .type = LVAL_ERR,
-    .err = value
+    .err = msg
   };
 }
 
 static Lval_t get_lval_double(double value) {
   return (Lval_t){
     .type = LVAL_DECIMAL,
-    .num.f_num = value
+    .num.f = value
   };
 }
 
 static Lval_t get_lval_long(long value) {
   return (Lval_t){
     .type = LVAL_INTEGER,
-    .num.li_num = value
+    .num.li = value
   };
 }
 
@@ -74,7 +81,7 @@ static void test_integer_addition(mpc_parser_t* language) {
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
-    Lval_t res = eval_ast(r.output);
+    Lval_t* res = eval_ast(r.output);
     assert_equal(res, expected, test_name);
     mpc_ast_delete(r.output);
   }
@@ -88,7 +95,7 @@ static void test_decimal_addition(mpc_parser_t* language) {
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
-    Lval_t res = eval_ast(r.output);
+    Lval_t* res = eval_ast(r.output);
     assert_equal(res, expected, test_name);
     mpc_ast_delete(r.output);
   }
@@ -102,7 +109,7 @@ static void test_heterogenous_addition(mpc_parser_t* language) {
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
-    Lval_t res = eval_ast(r.output);
+    Lval_t* res = eval_ast(r.output);
     assert_equal(res, expected, test_name);
     mpc_ast_delete(r.output);
   }
@@ -116,7 +123,7 @@ static void test_all_operators(mpc_parser_t* language) {
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
-    Lval_t res = eval_ast(r.output);
+    Lval_t* res = eval_ast(r.output);
     assert_equal(res, expected, test_name);
     mpc_ast_delete(r.output);
   }
@@ -130,7 +137,7 @@ static void test_min_max(mpc_parser_t* language) {
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
-    Lval_t res = eval_ast(r.output);
+    Lval_t* res = eval_ast(r.output);
     assert_equal(res, expected, test_name);
     mpc_ast_delete(r.output);
   }
@@ -140,11 +147,11 @@ static void test_DivByZero_err(mpc_parser_t* language) {
 
   char* test_name = "DivByZero";
   char* test_statement = "/ 1. 0";
-  Lval_t expected = get_lval_err(LERR_DIV_ZERO);
+  Lval_t expected = get_lval_err("By Zero");
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
-    Lval_t res = eval_ast(r.output);
+    Lval_t* res = eval_ast(r.output);
     assert_equal(res, expected, test_name);
     mpc_ast_delete(r.output);
   }
@@ -154,11 +161,25 @@ static void test_BadInput_err(mpc_parser_t* language) {
 
   char* test_name = "BadInput";
   char* test_statement = "% 1. 0.0";
-  Lval_t expected = get_lval_err(LERR_BAD_NUM);
+  Lval_t expected = get_lval_err("cannot be 0");
 
   mpc_result_t r;
   if (mpc_parse("test", test_statement, language, &r)) {
-    Lval_t res = eval_ast(r.output);
+    Lval_t* res = eval_ast(r.output);
+    assert_equal(res, expected, test_name);
+    mpc_ast_delete(r.output);
+  }
+}
+
+static void test_NonNumber_err(mpc_parser_t* language) {
+
+  char* test_name = "NonNumber";
+  char* test_statement = "(/ ())";
+  Lval_t expected = get_lval_err("non-number");
+
+  mpc_result_t r;
+  if (mpc_parse("test", test_statement, language, &r)) {
+    Lval_t* res = eval_ast(r.output);
     assert_equal(res, expected, test_name);
     mpc_ast_delete(r.output);
   }
@@ -190,6 +211,7 @@ int main(int argc, char** argv) {
     test_DivByZero_err(language);
     test_BadInput_err(language);
     test_syntax_err(language);
+    test_NonNumber_err(language);
 
     cleanup();
 
