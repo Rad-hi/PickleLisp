@@ -7,27 +7,31 @@
 typedef enum {
   LVAL_INTEGER,
   LVAL_DECIMAL,
-  LVAL_ERR
+  LVAL_ERR,
+  LVAL_SYM,
+  LVAL_SEXPR
 } LVAL_e;
 
-typedef enum {
-  LERR_DIV_ZERO,
-  LERR_BAD_NUM,
-  LERR_BAD_OP
-} LERR_t;
-
 typedef union {
-  long li_num;
-  double f_num;
+  long li;
+  double f;
 } Numeric_u;
 
-typedef struct {
+typedef struct Lval_t {
   LVAL_e type;
   Numeric_u num;
-  LERR_t err;
+  union {
+    char* err;
+    char* sym;  // symbol
+  };
+  int count;
+  struct Lval_t** cell;
 } Lval_t;
 
-void lval_print(Lval_t v);
-void lval_println(Lval_t v);
-Lval_t eval_op(Lval_t x, char* op, Lval_t y);
-Lval_t eval_ast(mpc_ast_t *ast);
+
+Lval_t* lval_read(mpc_ast_t* ast);
+void lval_del(Lval_t* v);
+void lval_print(Lval_t* v);
+void lval_println(Lval_t* v);
+// Lval_t eval_op(Lval_t x, char* op, Lval_t y);
+// Lval_t eval_ast(mpc_ast_t *ast);

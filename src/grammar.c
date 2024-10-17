@@ -7,21 +7,23 @@ mpc_parser_t* create_lang() {
   parsers[i++] = mpc_new("integer");
   parsers[i++] = mpc_new("decimal");
   parsers[i++] = mpc_new("number");
-  parsers[i++] = mpc_new("operator");
+  parsers[i++] = mpc_new("symbol");
+  parsers[i++] = mpc_new("sexpr");
   parsers[i++] = mpc_new("expr");
-  parsers[i++] = mpc_new("language");
+  parsers[i++] = mpc_new("lang");
 
   assert(i == NUM_PARSERS && "It seems you added a new rule"
                              "without updating `NUM_PARSERS`");
 
   mpca_lang(MPCA_LANG_DEFAULT,
-    "integer  : /-?[0-9]+/ ;"
-    "decimal  : /-?[0-9]*['.'][0-9]*[fF]?/ ;"
-    "number   : <decimal> | <integer> ;"
-    "operator : '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ;"
-    "expr     : <number> | '(' <operator> <expr>+ ')' ;"
-    "language : /^/ <operator> <expr>+ /$/ ;",
-    parsers[0], parsers[1], parsers[2], parsers[3], parsers[4], parsers[5]
+    "integer : /-?[0-9]+/ ;"
+    "decimal : /-?[0-9]*['.'][0-9]*[fF]?/ ;"
+    "number  : <decimal> | <integer> ;"
+    "symbol  : '+' | '-' | '*' | '/' | '%' | '^' | \"min\" | \"max\" ;"
+    "sexpr   : '(' <expr>* ')' ;"
+    "expr    : <number> | <symbol> | <sexpr> ;"
+    "lang    : /^/ <expr>* /$/ ;",
+    parsers[0], parsers[1], parsers[2], parsers[3], parsers[4], parsers[5], parsers[6]
   );
 
   return parsers[NUM_PARSERS - 1];

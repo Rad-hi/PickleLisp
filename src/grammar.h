@@ -3,7 +3,7 @@
 
 #include "mpc.h"
 
-#define NUM_PARSERS  6
+#define NUM_PARSERS  7
 
 mpc_parser_t* create_lang();
 void cleanup();

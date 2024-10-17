@@ -45,8 +45,9 @@ int main(int argc, char** argv) {
 #if PRINT_AST
       mpc_ast_print(r.output);
 #endif
-      Lval_t res = eval_ast(r.output);
+      Lval_t* res = lval_read(r.output);
       lval_println(res);
+      lval_del(res);
       mpc_ast_delete(r.output);
     } else {
       mpc_err_print(r.error);
