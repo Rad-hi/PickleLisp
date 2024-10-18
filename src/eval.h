@@ -8,28 +8,33 @@
 #define min(a, b)  ((a) > (b) ? (b) : (a))
 #define max(a, b)  ((a) > (b) ? (a) : (b))
 
+#define LASSERT(arg, cond, err)  \
+    if (!(cond)) { lval_del(arg); return lval_create_err(err); }
+
+
 typedef enum {
-  LVAL_INTEGER,
-  LVAL_DECIMAL,
-  LVAL_ERR,
-  LVAL_SYM,
-  LVAL_SEXPR
+    LVAL_INTEGER,
+    LVAL_DECIMAL,
+    LVAL_ERR,
+    LVAL_SYM,
+    LVAL_SEXPR,
+    LVAL_QEXPR,
 } LVAL_e;
 
 typedef union {
-  long li;
-  double f;
+    long li;
+    double f;
 } Numeric_u;
 
 typedef struct Lval_t {
-  LVAL_e type;
-  Numeric_u num;
-  union {
-    char* err;
-    char* sym;  // symbol
-  };
-  int count;
-  struct Lval_t** cell;
+    LVAL_e type;
+    Numeric_u num;
+    union {
+        char* err;
+        char* sym;  // symbol
+    };
+    int count;
+    struct Lval_t** cell;
 } Lval_t;
 
 
