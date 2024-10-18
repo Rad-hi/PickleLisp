@@ -1,5 +1,6 @@
 #include "grammar.h"
 
+#define NUM_PARSERS 8
 static mpc_parser_t* parsers[NUM_PARSERS];
 
 mpc_parser_t* create_lang() {

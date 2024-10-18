@@ -265,15 +265,10 @@ static Lval_t* builtin_op(Lval_t* a, char* op) {
 
         // if any one of inuts is a decimal, output will be decimal
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
-        // since the `num` field is a union, only one value could exist at a time
-        // and accessing the other is UB (weird values), we need to transfer
-        // the data when we're trying to do `integer op decimal` operations
         if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
-            y->type = LVAL_DECIMAL;
-            y->num.f = (double)y->num.li;
+            y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
         } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
-            x->type = LVAL_DECIMAL;
-            x->num.f = (double)x->num.li;
+            x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
         }
 
         if (strcmp(op, "+") == 0) x->num.f += y->num.f;
@@ -429,7 +424,7 @@ static Lval_t* builtin_eval(Lval_t* a) {
 static Lval_t* builtin_join(Lval_t* a) {
     for (int i = 0; i < a->count; ++i) {
         LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
-        "fn `join` expects an argument of type Q-Expression { ... }!");
+        "fn `join` expects arguments of type Q-Expression { ... }!");
     }
 
     Lval_t* x = lval_pop(a, 0);
