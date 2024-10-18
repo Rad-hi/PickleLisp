@@ -10,6 +10,12 @@
 #define ALMOST_EQ(a, b)             fabs((a) - (b)) <= (EUPSILON)
 #define PRINT_VERDICT(cond, name)   printf("[%s] [Test %s]\n", (cond) ? "PASSED" : "FAILED", (name));
 
+typedef struct {
+    char* name;
+    char* statement;
+    Lval_t expected;
+} test_statement_t;
+
 
 static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
     switch (expected.type) {
@@ -71,120 +77,172 @@ static Lval_t get_lval_long(long value) {
 /*------------------*/
 
 static void test_integer_addition(mpc_parser_t* language) {
-
-    char* test_name = "integer addition";
-    char* test_statement = "+ 1 1";
-    Lval_t expected = get_lval_long(2);
+    test_statement_t t = {
+        .name = "integer addition",
+        .statement = "+ 1 1",
+        .expected = get_lval_long(2),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
 static void test_decimal_addition(mpc_parser_t* language) {
-
-    char* test_name = "decimal addition";
-    char* test_statement = "+ 1. 3.5";
-    Lval_t expected = get_lval_double(4.5);
+    test_statement_t t = {
+        .name = "decimal addition",
+        .statement = "+ 1. 3.5",
+        .expected = get_lval_double(4.5),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
 static void test_heterogenous_addition(mpc_parser_t* language) {
-
-    char* test_name = "heterogenous addition";
-    char* test_statement = "+ 32 33. 2.4 .6 1";
-    Lval_t expected = get_lval_double(69.);
+    test_statement_t t = {
+        .name = "heterogenous addition",
+        .statement = "+ 32 33. 2.4 .6 1",
+        .expected = get_lval_double(69.),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
 static void test_all_operators(mpc_parser_t* language) {
-
-    char* test_name = "all operators";
-    char* test_statement = "+ 1 (* 1 2) (/ 4 2) (% 15 2) (- 0 6) (^ 3 2)";
-    Lval_t expected = get_lval_long(9);
+    test_statement_t t = {
+        .name = "all operators",
+        .statement = "+ 1 (* 1 2) (/ 4 2) (% 15 2) (- 0 6) (^ 3 2)",
+        .expected = get_lval_long(9),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
 static void test_min_max(mpc_parser_t* language) {
-
-    char* test_name = "min max";
-    char* test_statement = "min 69 1200 (max 666 420 2334)";
-    Lval_t expected = get_lval_long(69);
+    test_statement_t t = {
+        .name = "min max",
+        .statement = "min 69 1200 (max 666 420 2334)",
+        .expected = get_lval_long(69),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
-static void test_DivByZero_err(mpc_parser_t* language) {
+static void test_QExpressions(mpc_parser_t* language) {
+    test_statement_t tests[] = {
+        {
+            .name = "QExpressions head-tail long int",
+            .statement = "eval (head (tail (tail {5 6 7 8 3.5})))",
+            .expected = get_lval_long(7)
+        },
+        {
+            .name = "QExpressions head-tail double",
+            .statement = "eval (head (tail (tail (tail {5 6 7 6.9 3.5}))))",
+            .expected = get_lval_double(6.9)
+        },
+        {
+            .name = "QExpressions list-head",
+            // NOTE: 2 evals becaue first eval returns a Q-Expr, second returns an int
+            .statement = "eval (eval {head (list 1 2)})",
+            .expected = get_lval_long(1)
+        },
+        {
+            .name = "QExpressions head-arithmetics",
+            .statement = "eval (head {(+ 1 2) (+ 10 20)})",
+            .expected = get_lval_long(3)
+        },
 
-    char* test_name = "DivByZero";
-    char* test_statement = "/ 1. 0";
-    Lval_t expected = get_lval_err("By Zero");
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strcmp(tests[i].statement, "end") != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = eval_ast(r.output);
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        }
+        i++;
+    }
+}
+
+/*--------------------------------------*/
+/* NOTE: VERY BADLY WRITTEN ERROR TESTS */
+/*--------------------------------------*/
+
+static void test_DivByZero_err(mpc_parser_t* language) {
+    test_statement_t t = {
+        .name = "DivByZero",
+        .statement = "/ 1. 0",
+        .expected = get_lval_err("By Zero"),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
 static void test_BadInput_err(mpc_parser_t* language) {
-
-    char* test_name = "BadInput";
-    char* test_statement = "% 1. 0.0";
-    Lval_t expected = get_lval_err("cannot be 0");
+    test_statement_t t = {
+        .name = "BadInput",
+        .statement = "% 1. 0.",
+        .expected = get_lval_err("cannot be 0"),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
 static void test_NonNumber_err(mpc_parser_t* language) {
-
-    char* test_name = "NonNumber";
-    char* test_statement = "(/ ())";
-    Lval_t expected = get_lval_err("non-number");
+    test_statement_t t = {
+        .name = "NonNumber",
+        .statement = "(/ ())",
+        .expected = get_lval_err("non-number"),
+    };
 
     mpc_result_t r;
-    if (mpc_parse("test", test_statement, language, &r)) {
+    if (mpc_parse("test", t.statement, language, &r)) {
         Lval_t* res = eval_ast(r.output);
-        assert_equal(res, expected, test_name);
+        assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
     }
 }
 
 static void test_syntax_err(mpc_parser_t* language) {
 
-    char* test_name = "syntax";
+    char* test_name = "syntax (testing mpc)";
     char* test_statement = "$";
 
     mpc_result_t r;
@@ -209,6 +267,7 @@ int main(int argc, char** argv) {
     test_BadInput_err(language);
     test_syntax_err(language);
     test_NonNumber_err(language);
+    test_QExpressions(language);
 
     cleanup();
 
