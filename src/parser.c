@@ -43,15 +43,15 @@ int main(int argc, char** argv) {
 
         if (mpc_parse("<stdin>", buf, language, &r)) {
 #if PRINT_AST
-        mpc_ast_print(r.output);
+            mpc_ast_print(r.output);
 #endif
-        Lval_t* res = eval_ast(r.output);
-        lval_println(res);
-        lval_del(res);
-        mpc_ast_delete(r.output);
+            Lval_t* res = eval_ast(r.output);
+            lval_println(res);
+            lval_del(res);
+            mpc_ast_delete(r.output);
         } else {
-        mpc_err_print(r.error);
-        mpc_err_delete(r.error);
+            mpc_err_print(r.error);
+            mpc_err_delete(r.error);
         }
 
         free(buf);
