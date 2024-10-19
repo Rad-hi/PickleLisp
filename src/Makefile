@@ -26,7 +26,7 @@ OBJS = $(SRCS:.c=.o)
 
 # define the executable file 
 #
-MAIN = main.o
+MAIN = PickleLisp
 
 
 
