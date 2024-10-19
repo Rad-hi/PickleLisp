@@ -22,4 +22,4 @@ jobs:
           cd ../test
           make
       - name: Run tests
-        run: ./test/main.o
+        run: ./test/test
