@@ -73,11 +73,11 @@ void lval_del(Lval_t* v) {
 
         case LVAL_QEXPR:
         case LVAL_SEXPR: {
-        for (int i = 0; i < v->count; ++i) {
-            lval_del(v->cell[i]);
-        }
-        free(v->cell);
-        break;
+            for (int i = 0; i < v->count; ++i) {
+                lval_del(v->cell[i]);
+            }
+            free(v->cell);
+            break;
         }
     }
     free(v);
@@ -205,10 +205,7 @@ static void lval_expr_print(Lval_t* v, char open, char close) {
     putchar(open);
     for (int i = 0; i < v->count; ++i) {
         lval_print(v->cell[i]);
-
-        if (i != (v->count - 1)) {
-        putchar(' ');
-        }
+        if (i != (v->count - 1)) { putchar(' '); }
     }
     putchar(close);
 }
@@ -247,8 +244,8 @@ static Lval_t* builtin(Lval_t* a, char* fn) {
 static Lval_t* builtin_op(Lval_t* a, char* op) {
     for (int i = 0; i < a->count; ++i) {
         if (a->cell[i]->type != LVAL_INTEGER && a->cell[i]->type != LVAL_DECIMAL) {
-        lval_del(a);
-        return lval_create_err("Cannot operate on non-number!");
+            lval_del(a);
+            return lval_create_err("Cannot operate on non-number!");
         }
     }
 
@@ -265,57 +262,57 @@ static Lval_t* builtin_op(Lval_t* a, char* op) {
 
         // if any one of inuts is a decimal, output will be decimal
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
-        if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
-            y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
-        } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
-            x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
-        }
+            if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
+                y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
+            } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
+                x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
+            }
 
-        if (strcmp(op, "+") == 0) x->num.f += y->num.f;
-        if (strcmp(op, "-") == 0) x->num.f -= y->num.f;
-        if (strcmp(op, "*") == 0) x->num.f *= y->num.f;
-        if (strcmp(op, "^") == 0) x->num.f = pow(x->num.f, y->num.f);
-        if (strcmp(op, "%") == 0) {
-            if (y->num.f == 0.0) {
-            lval_del(x);
-            lval_del(y);
-            x = lval_create_err("Right-hand operand of \% cannot be 0!");
-            break;
+            if (strcmp(op, "+") == 0) x->num.f += y->num.f;
+            if (strcmp(op, "-") == 0) x->num.f -= y->num.f;
+            if (strcmp(op, "*") == 0) x->num.f *= y->num.f;
+            if (strcmp(op, "^") == 0) x->num.f = pow(x->num.f, y->num.f);
+            if (strcmp(op, "%") == 0) {
+                if (y->num.f == 0.0) {
+                    lval_del(x);
+                    lval_del(y);
+                    x = lval_create_err("Right-hand operand of \% cannot be 0!");
+                    break;
+                }
+                x->num.f = fmod(x->num.f, y->num.f);
             }
-            x->num.f = fmod(x->num.f, y->num.f);
-        }
-        if (strcmp(op, "/") == 0) {
-            if (y->num.f == 0.0) {
-            lval_del(x);
-            lval_del(y);
-            x = lval_create_err("Division By Zero!");
-            break;
+            if (strcmp(op, "/") == 0) {
+                if (y->num.f == 0.0) {
+                    lval_del(x);
+                    lval_del(y);
+                    x = lval_create_err("Division By Zero!");
+                    break;
+                }
+                x->num.f /= y->num.f;
             }
-            x->num.f /= y->num.f;
-        }
         } else {
-        if (strcmp(op, "+") == 0) x->num.li += y->num.li;
-        if (strcmp(op, "-") == 0) x->num.li -= y->num.li;
-        if (strcmp(op, "*") == 0) x->num.li *= y->num.li;
-        if (strcmp(op, "^") == 0) x->num.li = (long)pow(x->num.li, y->num.li);
-        if (strcmp(op, "%") == 0) {
-            if (y->num.li == 0) {
-            lval_del(x);
-            lval_del(y);
-            x = lval_create_err("Right-hand operand of \% cannot be 0!");
-            break;
+            if (strcmp(op, "+") == 0) x->num.li += y->num.li;
+            if (strcmp(op, "-") == 0) x->num.li -= y->num.li;
+            if (strcmp(op, "*") == 0) x->num.li *= y->num.li;
+            if (strcmp(op, "^") == 0) x->num.li = (long)pow(x->num.li, y->num.li);
+            if (strcmp(op, "%") == 0) {
+                if (y->num.li == 0) {
+                    lval_del(x);
+                    lval_del(y);
+                    x = lval_create_err("Right-hand operand of \% cannot be 0!");
+                    break;
+                }
+                x->num.li %= y->num.li;
             }
-            x->num.li %= y->num.li;
-        }
-        if (strcmp(op, "/") == 0) {
-            if (y->num.li == 0) {
-            lval_del(x);
-            lval_del(y);
-            x = lval_create_err("Division By Zero!");
-            break;
+            if (strcmp(op, "/") == 0) {
+                if (y->num.li == 0) {
+                    lval_del(x);
+                    lval_del(y);
+                    x = lval_create_err("Division By Zero!");
+                    break;
+                }
+                x->num.li /= y->num.li;
             }
-            x->num.li /= y->num.li;
-        }
         }
 
         lval_del(y);
@@ -337,14 +334,14 @@ static Lval_t* builtin_min(Lval_t* a) {
         Lval_t* y = lval_pop(a, 0);
 
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
-        if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
-            y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
-        } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
-            x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
-        }
-        x->num.f = fmin(x->num.f, y->num.f);  
+            if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
+                y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
+            } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
+                x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
+            }
+            x->num.f = fmin(x->num.f, y->num.f);  
         } else {
-        x->num.li = min(x->num.li, y->num.li);  
+            x->num.li = min(x->num.li, y->num.li);  
         }
     }
 
@@ -364,14 +361,14 @@ static Lval_t* builtin_max(Lval_t* a) {
         Lval_t* y = lval_pop(a, 0);
 
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
-        if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
-            y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
-        } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
-            x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
-        }
-        x->num.f = fmax(x->num.f, y->num.f);  
+            if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
+                y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
+            } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
+                x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
+            }
+            x->num.f = fmax(x->num.f, y->num.f);  
         } else {
-        x->num.li = max(x->num.li, y->num.li);  
+            x->num.li = max(x->num.li, y->num.li);  
         }
     }
 
