@@ -32,6 +32,8 @@
 int main(int argc, char** argv) {
 
     mpc_parser_t* language = create_lang();
+    Lenv_t* e = lenv_new();
+    lenv_add_builtins(e);
 
     puts(LANG_NAME" Version 666.69.420");
     puts("Press Ctrl+C to Exit\n");
@@ -45,7 +47,7 @@ int main(int argc, char** argv) {
 #if PRINT_AST
             mpc_ast_print(r.output);
 #endif
-            Lval_t* res = eval_ast(r.output);
+            Lval_t* res = lval_eval(e, lval_read(r.output));
             lval_println(res);
             lval_del(res);
             mpc_ast_delete(r.output);
@@ -53,10 +55,10 @@ int main(int argc, char** argv) {
             mpc_err_print(r.error);
             mpc_err_delete(r.error);
         }
-
         free(buf);
     }
 
+    lenv_del(e);
     cleanup();
 
     return 0;

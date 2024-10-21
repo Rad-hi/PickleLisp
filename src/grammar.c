@@ -3,6 +3,9 @@
 #define NUM_PARSERS 8
 static mpc_parser_t* parsers[NUM_PARSERS];
 
+// defined in eval.c
+extern void _del_builtin_names();
+
 mpc_parser_t* create_lang() {
     int i = 0;
     parsers[i++] = mpc_new("integer");
@@ -21,9 +24,7 @@ mpc_parser_t* create_lang() {
         "integer : /-?[0-9]+/ ;"
         "decimal : /-?[0-9]*['.'][0-9]*[fF]?/ ;"
         "number  : <decimal> | <integer> ;"
-        "symbol  : '+' | '-' | '*' | '/' | '%' | '^' | "
-        "         \"min\" | \"max\" | \"list\" | \"head\" | "
-        "         \"tail\" | \"join\" | \"eval\" ;"
+        "symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&^%]+/ ;"
         "sexpr   : '(' <expr>* ')' ;"
         "qexpr   : '{' <expr>* '}' ;"
         "expr    : <number> | <symbol> | <sexpr> | <qexpr> ;"
@@ -39,4 +40,5 @@ void cleanup() {
     for (int i = 0; i < NUM_PARSERS; ++i) {
         mpc_cleanup(1, parsers[i]);
     }
+    _del_builtin_names();
 }

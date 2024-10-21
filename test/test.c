@@ -46,6 +46,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
         case LVAL_SEXPR:
         case LVAL_QEXPR:
         case LVAL_SYM:
+        case LVAL_FN:
             // TODO: handle this case
             break;
   }
@@ -76,7 +77,7 @@ static Lval_t get_lval_long(long value) {
 /* TESTS START HERE */
 /*------------------*/
 
-static void test_integer_addition(mpc_parser_t* language) {
+static void test_integer_addition(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "integer addition",
         .statement = "+ 1 1",
@@ -85,13 +86,19 @@ static void test_integer_addition(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_decimal_addition(mpc_parser_t* language) {
+static void test_decimal_addition(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "decimal addition",
         .statement = "+ 1. 3.5",
@@ -100,13 +107,19 @@ static void test_decimal_addition(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_heterogenous_addition(mpc_parser_t* language) {
+static void test_heterogenous_addition(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "heterogenous addition",
         .statement = "+ 32 33. 2.4 .6 1",
@@ -115,13 +128,19 @@ static void test_heterogenous_addition(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_all_operators(mpc_parser_t* language) {
+static void test_all_operators(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "all operators",
         .statement = "+ 1 (* 1 2) (/ 4 2) (% 15 2) (- 0 6) (^ 3 2)",
@@ -130,13 +149,19 @@ static void test_all_operators(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_min_max(mpc_parser_t* language) {
+static void test_min_max(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "min max",
         .statement = "min 69 1200 (max 666 420 2334)",
@@ -145,13 +170,19 @@ static void test_min_max(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_QExpressions(mpc_parser_t* language) {
+static void test_QExpressions(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t tests[] = {
         {
             .name = "QExpressions head-tail long int",
@@ -183,9 +214,14 @@ static void test_QExpressions(mpc_parser_t* language) {
     while (strcmp(tests[i].statement, "end") != 0) {
         mpc_result_t r;
         if (mpc_parse("test", tests[i].statement, language, &r)) {
-            Lval_t* res = eval_ast(r.output);
+            Lval_t* res = lval_eval(e, lval_read(r.output));
             assert_equal(res, tests[i].expected, tests[i].name);
             mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
         }
         i++;
     }
@@ -195,7 +231,7 @@ static void test_QExpressions(mpc_parser_t* language) {
 /* NOTE: VERY BADLY WRITTEN ERROR TESTS */
 /*--------------------------------------*/
 
-static void test_DivByZero_err(mpc_parser_t* language) {
+static void test_DivByZero_err(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "DivByZero",
         .statement = "/ 1. 0",
@@ -204,13 +240,19 @@ static void test_DivByZero_err(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_BadInput_err(mpc_parser_t* language) {
+static void test_BadInput_err(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "BadInput",
         .statement = "% 1. 0.",
@@ -219,13 +261,19 @@ static void test_BadInput_err(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_NonNumber_err(mpc_parser_t* language) {
+static void test_NonNumber_err(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "NonNumber",
         .statement = "(/ ())",
@@ -234,13 +282,19 @@ static void test_NonNumber_err(mpc_parser_t* language) {
 
     mpc_result_t r;
     if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = eval_ast(r.output);
+        Lval_t* res = lval_eval(e, lval_read(r.output));
         assert_equal(res, t.expected, t.name);
         mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
     }
 }
 
-static void test_syntax_err(mpc_parser_t* language) {
+static void test_syntax_err(mpc_parser_t* language, Lenv_t* e) {
 
     char* test_name = "syntax (testing mpc)";
     char* test_statement = "$";
@@ -248,7 +302,9 @@ static void test_syntax_err(mpc_parser_t* language) {
     mpc_result_t r;
     if (mpc_parse("test", test_statement, language, &r)) {
         PRINT_VERDICT(false, test_name);
+#ifdef EXIT_ON_FAIL
         exit(1);
+#endif
     } else {
         PRINT_VERDICT(true, test_name);
     }
@@ -256,19 +312,21 @@ static void test_syntax_err(mpc_parser_t* language) {
 
 int main(int argc, char** argv) {
 
+    Lenv_t* e = lenv_new();
+    lenv_add_builtins(e);
     mpc_parser_t* language = create_lang();
 
-    test_integer_addition(language);
-    test_decimal_addition(language);
-    test_heterogenous_addition(language);
-    test_all_operators(language);
-    test_min_max(language);
-    test_DivByZero_err(language);
-    test_BadInput_err(language);
-    test_syntax_err(language);
-    test_NonNumber_err(language);
-    test_QExpressions(language);
+    test_integer_addition(language, e);
+    test_decimal_addition(language, e);
+    test_heterogenous_addition(language, e);
+    test_all_operators(language, e);
+    test_min_max(language, e);
+    test_DivByZero_err(language, e);
+    test_BadInput_err(language, e);
+    test_syntax_err(language, e);
+    test_NonNumber_err(language, e);
+    test_QExpressions(language, e);
 
     cleanup();
-
+    lenv_del(e);
 }
