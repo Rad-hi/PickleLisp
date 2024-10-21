@@ -15,6 +15,7 @@ static Lval_t* builtin_list(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_def(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_exit(Lenv_t* e, Lval_t* a);
 
 static void lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v);
 static Lval_t* lenv_get(Lenv_t* e, Lval_t* k);
@@ -93,6 +94,7 @@ void lval_del(Lval_t* v) {
     switch (v->type) {
         case LVAL_FN:
         case LVAL_INTEGER:
+        case LVAL_EXIT__:
         case LVAL_DECIMAL: break;
 
         case LVAL_ERR: free(v->err); break;
@@ -119,6 +121,7 @@ void lval_print(Lval_t* v) {
         case LVAL_SEXPR:   lval_expr_print(v, '(', ')'); break;
         case LVAL_QEXPR:   lval_expr_print(v, '{', '}'); break;
         case LVAL_FN:      printf("<function>"); break;
+        case LVAL_EXIT__:  printf("exiting"); break;
     }
 }
 
@@ -165,6 +168,9 @@ void lenv_add_builtins(Lenv_t* e) {
 
     /* variable functions */
     lenv_add_builtin(e, "def", builtin_def);
+
+
+    lenv_add_builtin(e, "exit", builtin_exit);
 }
 
 void _del_builtin_names(void) {
@@ -576,6 +582,10 @@ static Lval_t* builtin_def(Lenv_t* e, Lval_t* a) {
     return lval_create_sexpr();
 }
 
+static Lval_t* builtin_exit(Lenv_t* e, Lval_t* a) {
+    a->type = LVAL_EXIT__;
+    return a;
+}
 
 static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
     while (y->count) { x = lval_add(x, lval_pop(y, 0)); }
@@ -613,6 +623,7 @@ static Lval_t* lval_copy(Lval_t* v) {
             }
             break;
         }
+        case LVAL_EXIT__: break;
     }
     return x;
 }
@@ -671,12 +682,13 @@ static bool _lookup_builtin_name(char* name) {
 static char* ltype_name(LVAL_e t) {
     switch (t) {
         case LVAL_INTEGER:
-        case LVAL_DECIMAL: return "Number";
-        case LVAL_ERR: return "Error";
-        case LVAL_SYM: return "Symbol";
-        case LVAL_FN: return "Function";
-        case LVAL_SEXPR: return "S-Expression";
-        case LVAL_QEXPR: return "Q-Expression";
+        case LVAL_DECIMAL:  return "Number";
+        case LVAL_ERR:      return "Error";
+        case LVAL_SYM:      return "Symbol";
+        case LVAL_FN:       return "Function";
+        case LVAL_SEXPR:    return "S-Expression";
+        case LVAL_QEXPR:    return "Q-Expression";
+        case LVAL_EXIT__:   return "Exit";
         default: return "Your language is falling apart!";
     }
 }

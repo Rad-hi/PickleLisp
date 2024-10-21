@@ -48,9 +48,13 @@ int main(int argc, char** argv) {
             mpc_ast_print(r.output);
 #endif
             Lval_t* res = lval_eval(e, lval_read(r.output));
+            bool exit_REPL = res->type == LVAL_EXIT__;
             lval_println(res);
+
             lval_del(res);
             mpc_ast_delete(r.output);
+
+            if (exit_REPL) break;
         } else {
             mpc_err_print(r.error);
             mpc_err_delete(r.error);

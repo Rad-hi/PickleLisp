@@ -33,6 +33,7 @@ typedef enum {
     LVAL_FN,
     LVAL_SEXPR,
     LVAL_QEXPR,
+    LVAL_EXIT__,
 } LVAL_e;
 
 typedef union {
