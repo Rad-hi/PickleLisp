@@ -169,7 +169,7 @@ void lenv_add_builtins(Lenv_t* e) {
     /* variable functions */
     lenv_add_builtin(e, "def", builtin_def);
 
-
+    /* behavioral methods */
     lenv_add_builtin(e, "exit", builtin_exit);
 }
 

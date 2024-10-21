@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     lenv_add_builtins(e);
 
     puts(LANG_NAME" Version 666.69.420");
-    puts("Press Ctrl+C to Exit\n");
+    puts("exit() or Ctrl+C to Exit\n");
 
     mpc_result_t r;
     while(true) {
