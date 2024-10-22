@@ -17,6 +17,15 @@
         return  err;                                        \
     }
 
+#define LASSERT_TYPE(fn, arg, idx, expect)                             \
+  LASSERT(arg, arg->cell[idx]->type == expect,                         \
+    "fn `%s` expects arg of type %s. Arg [%i] is of type %s.",         \
+    fn, ltype_name(expect), idx + 1, ltype_name(arg->cell[idx]->type))
+
+#define LASSERT_NUM(fn, arg, num)                                    \
+  LASSERT(arg, arg->count == num,                                    \
+    "fn `%s` expects [%i] arguments, got [%i]", fn, num, arg->count)
+
 
 struct Lval_t;
 struct Lenv_t;
@@ -43,19 +52,29 @@ typedef union {
 
 // NOTE: might be better to use a hashmap here, gotta implement it though
 struct Lenv_t {
-    long count;
+    Lenv_t* parent;
+    int count;
     char** syms;
     Lval_t** vals;
 };
 
 struct Lval_t {
     LVAL_e type;
+
+    /* Lval_t can only represent one at a time */
     union {
         Numeric_u num;
         char* err;
-        char* sym;          // symbol
-        Lbuiltin_t fn;      // function
+        char* sym;
+        Lbuiltin_t builtin;
     };
+
+    /* Functions' stuff (along with builtin) */
+    Lenv_t* env;
+    Lval_t* formals;
+    Lval_t* body;
+
+    /* Expression */
     int count;
     struct Lval_t** cell;
 };

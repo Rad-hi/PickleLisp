@@ -47,7 +47,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
         case LVAL_QEXPR:
         case LVAL_SYM:
         case LVAL_FN:
-            // TODO: handle this case
+        case LVAL_EXIT__:
             break;
   }
 }
