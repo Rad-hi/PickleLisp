@@ -703,16 +703,15 @@ static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
     LASSERT_TYPE("fn", a, 1, LVAL_QEXPR);
 
     Lval_t* symbols = a->cell[0];
-    Lval_t* fn_name = lval_pop(symbols, 0);
 
     /* First Q-expr must only contain symbols */
     for (int i = 0; i < symbols->count; ++i) {
         LASSERT(a, (symbols->cell[i]->type == LVAL_SYM),
-            "Function `fn` cannot define arg [%i] of type [%s] for [%s]. "
-            "Expected type [%s]", i + 1, ltype_name(symbols->cell[i]->type),
-            fn_name->sym, ltype_name(LVAL_SYM));
+            "Function `fn` cannot define arg [%i] of type [%s], expected [%s]",
+            i, ltype_name(symbols->cell[i]->type), ltype_name(LVAL_SYM));
     }
 
+    Lval_t* fn_name = lval_pop(symbols, 0);
     Lval_t* formals = lval_pop(a, 0);
     Lval_t* body = lval_pop(a, 0);
     lenv_def(e, fn_name, lval_create_lambda(formals, body));
