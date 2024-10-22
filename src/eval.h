@@ -19,12 +19,12 @@
 
 #define LASSERT_TYPE(fn, arg, idx, expect)                             \
   LASSERT(arg, arg->cell[idx]->type == expect,                         \
-    "fn `%s` expects arg of type %s. Arg [%i] is of type %s.",         \
+    "Function `%s` expects arg of type %s. Arg [%i] is of type %s.",   \
     fn, ltype_name(expect), idx + 1, ltype_name(arg->cell[idx]->type))
 
-#define LASSERT_NUM(fn, arg, num)                                    \
-  LASSERT(arg, arg->count == num,                                    \
-    "fn `%s` expects [%i] arguments, got [%i]", fn, num, arg->count)
+#define LASSERT_NUM(fn, arg, num)                                          \
+  LASSERT(arg, arg->count == num,                                          \
+    "Function `%s` expects [%i] arguments, got [%i]", fn, num, arg->count)
 
 
 struct Lval_t;

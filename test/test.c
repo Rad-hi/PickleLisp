@@ -227,6 +227,49 @@ static void test_QExpressions(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
+static void test_fn(mpc_parser_t* language, Lenv_t* e) {
+    /*
+        STEP ZERO: Define the unit test for the `sum` function
+    */
+    
+    test_statement_t t = {
+        .name = "fn sum",
+        .statement = "sum 1 2 3",
+        .expected = get_lval_long(6),
+    };
+
+    mpc_result_t r;
+
+    /*
+        STEP ONE: Register the `sum` function
+    */
+    if (mpc_parse("test", "fn {sum & es} {eval (join (list +) es)}", language, &r)) {
+        lval_eval(e, lval_read(r.output));
+        mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
+    }
+
+    /*
+        STEP TWO: call the `sum` function and test it
+    */
+    if (mpc_parse("test", t.statement, language, &r)) {
+        Lval_t* res = lval_eval(e, lval_read(r.output));
+        assert_equal(res, t.expected, t.name);
+        mpc_ast_delete(r.output);
+    } else {
+        printf("[FAILED] Parsing error\n");
+        PRINT_VERDICT(false, t.name);
+#ifdef EXIT_ON_FAIL
+        exit(1);
+#endif
+    }
+}
+
 /*--------------------------------------*/
 /* NOTE: VERY BADLY WRITTEN ERROR TESTS */
 /*--------------------------------------*/
@@ -326,6 +369,7 @@ int main(int argc, char** argv) {
     test_syntax_err(language, e);
     test_NonNumber_err(language, e);
     test_QExpressions(language, e);
+    test_fn(language, e);
 
     cleanup();
     lenv_del(e);

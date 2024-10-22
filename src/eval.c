@@ -14,28 +14,34 @@ static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_list(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a);
-static Lval_t* builtin_def(Lenv_t* e, Lval_t* a);
-static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn);
-static Lval_t* builtin_put(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_exit(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn);
+static Lval_t* builtin_def(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_put(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a);
 
+/* lenv manipulators */
 static void lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
 static void lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v);
 static void lenv_def(Lenv_t* e, Lval_t* k, Lval_t* v);
 static Lval_t* lenv_get(Lenv_t* e, Lval_t* k);
 static Lenv_t* lenv_copy(Lenv_t* e);
 
+/* lval manipulators */
 static Lval_t* lval_join(Lval_t* x, Lval_t* y);
 static Lval_t* lval_take(Lval_t* v, int i);
 static Lval_t* lval_pop(Lval_t* v, int i);
 static Lval_t* lval_add(Lval_t* v, Lval_t* x);
 static Lval_t* lval_call(Lenv_t* e, Lval_t* f, Lval_t* a);
+static Lval_t* lval_copy(Lval_t* v);
 
+/* Parsers */
 static Lval_t* lval_read_double(mpc_ast_t* ast);
 static Lval_t* lval_read_long(mpc_ast_t* ast);
 static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v);
 
+/* memory allocators */
 static Lval_t* lval_create_double(double x);
 static Lval_t* lval_create_long(long x);
 static Lval_t* lval_create_sexpr(void);
@@ -45,9 +51,8 @@ static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 
-static Lval_t* lval_copy(Lval_t* v);
+/* Misc */
 static void lval_expr_print(Lval_t* v, char open, char close);
-
 static char* ltype_name(LVAL_e t);
 
 /*
@@ -197,6 +202,7 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "def", builtin_def);
     lenv_add_builtin(e, "=", builtin_put);
     lenv_add_builtin(e, "\\", builtin_lambda);
+    lenv_add_builtin(e, "fn", builtin_fn);
 
     /* behavioral methods */
     lenv_add_builtin(e, "exit", builtin_exit);
@@ -356,7 +362,7 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
         if (fn->formals->count == 0) {
             lval_del(a);
             return lval_create_err(
-                "fn `user-defined` expects [%i] args, got [%i].", total, given);
+                "Function `user-defined` expects [%i] args, got [%i].", total, given);
         }
 
         Lval_t* sym = lval_pop(fn->formals, 0);
@@ -537,10 +543,10 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
 }
 
 static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
-    LASSERT(a, a->count >= 2, "fn `min` expects at least 2 arguments, got [%i]", a->count);
+    LASSERT(a, a->count >= 2, "Function `min` expects at least 2 arguments, got [%i]", a->count);
     for (int i = 0; i < a->count; ++i) {
         bool cond = a->cell[i]->type == LVAL_INTEGER || a->cell[i]->type == LVAL_DECIMAL;
-        LASSERT(a, cond, "fn `min` expects arguments of type Number,"
+        LASSERT(a, cond, "Function `min` expects arguments of type Number,"
                          " but arg [%i] is of type [%s]",
                          i + 1, ltype_name(a->cell[i]->type));
     }
@@ -566,10 +572,10 @@ static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
-    LASSERT(a, a->count >= 2, "fn `max` expects at least 2 arguments, got [%i]", a->count);
+    LASSERT(a, a->count >= 2, "Function `max` expects at least 2 arguments, got [%i]", a->count);
     for (int i = 0; i < a->count; ++i) {
         bool cond = a->cell[i]->type == LVAL_INTEGER || a->cell[i]->type == LVAL_DECIMAL;
-        LASSERT(a, cond, "fn `max` expects arguments of type Number,"
+        LASSERT(a, cond, "Function `max` expects arguments of type Number,"
                          " but arg [%i] is of type [%s]",
                          i + 1, ltype_name(a->cell[i]->type));
     }
@@ -595,13 +601,10 @@ static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
-    LASSERT(a, a->count == 1,
-        "fn `head` expects 1 argument, got [%i]", a->count);
-    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-        "fn `head` expects an argument of type [%s], "
-        "got [%s]", ltype_name(LVAL_QEXPR), ltype_name(a->cell[0]->type));
+    LASSERT_NUM("head", a, 1);
+    LASSERT_TYPE("head", a, 0, LVAL_QEXPR);
     LASSERT(a, a->cell[0]->count != 0,
-        "fn `head` expects a non-empty [%s], got {} as input!", ltype_name(LVAL_QEXPR));
+        "Function `head` expects a non-empty [%s], got {} as input!", ltype_name(LVAL_QEXPR));
 
     Lval_t* v = lval_take(a, 0);
     while (v->count > 1) { lval_del(lval_pop(v, 1)); }
@@ -609,13 +612,10 @@ static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
-    LASSERT(a, a->count == 1,
-        "fn `tail` expects 1 argument, got [%i]", a->count);
-    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-        "fn `tail` expects an argument of type [%s], "
-        "got [%s]", ltype_name(LVAL_QEXPR), ltype_name(a->cell[0]->type));
+    LASSERT_NUM("tail", a, 1);
+    LASSERT_TYPE("tail", a, 0, LVAL_QEXPR);
     LASSERT(a, a->cell[0]->count != 0,
-        "fn `tail` expects a non-empty [%s], got {} as input!", ltype_name(LVAL_QEXPR));
+        "Function `tail` expects a non-empty [%s], got {} as input!", ltype_name(LVAL_QEXPR));
 
     Lval_t* v = lval_take(a, 0);
     lval_del(lval_pop(v, 0));
@@ -628,11 +628,8 @@ static Lval_t* builtin_list(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a) {
-    LASSERT(a, a->count == 1,
-        "fn `eval` expects 1 argument, got [%i]", a->count);
-    LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
-        "fn `eval` expects an argument of type [%s], "
-        "got [%s]", ltype_name(LVAL_QEXPR), ltype_name(a->cell[0]->type));
+    LASSERT_NUM("eval", a, 1);
+    LASSERT_TYPE("eval", a, 0, LVAL_QEXPR);
 
     Lval_t* x = lval_take(a, 0);
     x->type = LVAL_SEXPR;
@@ -642,7 +639,7 @@ static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a) {
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a) {
     for (int i = 0; i < a->count; ++i) {
         LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
-        "fn `join` expects arguments of type [%s], "
+        "Function `join` expects arguments of type [%s], "
         "but arg [%i] is of type [%s]",
         ltype_name(LVAL_QEXPR), i + 1, ltype_name(a->cell[0]->type));
     }
@@ -669,18 +666,18 @@ static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn) {
 
     for (int i = 0; i < syms->count; ++i) {
         LASSERT(a, syms->cell[i]->type == LVAL_SYM,
-            "fn `%s` cannot define a non-symbol; arg number [%i] "
+            "Function `%s` cannot define a non-symbol; arg number [%i] "
             "is of type [%s]", fn, i + 1, ltype_name(syms->cell[i]->type));
     }
 
     LASSERT(a, syms->count == a->count - 1,
-        "fn `%s` expects #symbols == #values; "
+        "Function `%s` expects #symbols == #values; "
         "we got [%i] symbols, and [%i] values",
         fn, syms->count, a->count - 1);
 
     for (int i = 0; i < syms->count; ++i) {
         if (_lookup_builtin_name(syms->cell[i]->sym)) {
-            LASSERT(a, false, "fn `%s` cannot define arg number [%i]"
+            LASSERT(a, false, "Function `%s` cannot define arg number [%i]"
                               " named '%s'; builtin keyword!",
                               fn, i + 1, syms->cell[i]->sym);
         }
@@ -700,6 +697,29 @@ static Lval_t* builtin_exit(Lenv_t* e, Lval_t* a) {
     return a;
 }
 
+static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM("fn", a, 2);
+    LASSERT_TYPE("fn", a, 0, LVAL_QEXPR);
+    LASSERT_TYPE("fn", a, 1, LVAL_QEXPR);
+
+    Lval_t* symbols = a->cell[0];
+    Lval_t* fn_name = lval_pop(symbols, 0);
+
+    /* First Q-expr must only contain symbols */
+    for (int i = 0; i < symbols->count; ++i) {
+        LASSERT(a, (symbols->cell[i]->type == LVAL_SYM),
+            "Function `fn` cannot define arg [%i] of type [%s] for [%s]. "
+            "Expected type [%s]", i + 1, ltype_name(symbols->cell[i]->type),
+            fn_name->sym, ltype_name(LVAL_SYM));
+    }
+
+    Lval_t* formals = lval_pop(a, 0);
+    Lval_t* body = lval_pop(a, 0);
+    lenv_def(e, fn_name, lval_create_lambda(formals, body));
+    lval_del(a);
+    return lval_create_sexpr();
+}
+
 static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM("\\", a, 2);
     LASSERT_TYPE("\\", a, 0, LVAL_QEXPR);
@@ -708,7 +728,7 @@ static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a) {
     /* First Q-expr must only contain symbols */
     for (int i = 0; i < a->cell[0]->count; ++i) {
         LASSERT(a, (a->cell[0]->cell[i]->type == LVAL_SYM),
-            "fn `\\` cannot define arg [%i] of type [%s]. Expected type [%s]",
+            "Function `\\` cannot define arg [%i] of type [%s]. Expected type [%s]",
             i + 1, ltype_name(a->cell[0]->cell[i]->type), ltype_name(LVAL_SYM));
     }
 
