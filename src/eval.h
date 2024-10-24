@@ -31,6 +31,8 @@
   LASSERT(arg, arg->count == num,                                          \
     "Function `%s` expects [%i] arguments, got [%i]", fn, num, arg->count)
 
+/* the language defined in grammar.h */
+extern mpc_parser_t* pickle_lisp;
 
 struct Lval_t;
 struct Lenv_t;
@@ -90,11 +92,14 @@ struct Lval_t {
 
 Lval_t* lval_eval(Lenv_t* e, Lval_t* v);
 Lval_t* lval_read(mpc_ast_t* ast);
-void lval_del(Lval_t* v);
-void lval_print(Lval_t* v);
-void lval_println(Lval_t* v);
-
 Lenv_t* lenv_new(void);
-void lenv_del(Lenv_t* e);
-void lenv_add_builtins(Lenv_t* e);
-void _del_builtin_names(void);
+Lval_t* lval_add(Lval_t* v, Lval_t* x);
+Lval_t* lval_create_sexpr(void);
+Lval_t* lval_create_str(char* s);
+Lval_t* builtin_load(Lenv_t* e, Lval_t* a);
+void    lval_del(Lval_t* v);
+void    lval_print(Lval_t* v);
+void    lval_println(Lval_t* v);
+void    lenv_del(Lenv_t* e);
+void    lenv_add_builtins(Lenv_t* e);
+void    _del_builtin_names(void);

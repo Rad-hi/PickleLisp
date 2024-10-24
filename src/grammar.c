@@ -38,7 +38,8 @@ mpc_parser_t* create_lang() {
         parsers[5], parsers[6], parsers[7], parsers[8], parsers[9]
     );
 
-    return parsers[NUM_PARSERS - 1];
+    pickle_lisp = parsers[NUM_PARSERS - 1];
+    return pickle_lisp;
 }
 
 void cleanup() {

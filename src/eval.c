@@ -36,6 +36,9 @@ static Lval_t* builtin_not(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_and(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_or(Lenv_t* e, Lval_t* a);
 
+static Lval_t* builtin_error(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_print(Lenv_t* e, Lval_t* a);
+
 /* lenv manipulators */
 static void    lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val);
 static void    lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
@@ -48,7 +51,6 @@ static Lenv_t* lenv_copy(Lenv_t* e);
 static Lval_t* lval_join(Lval_t* x, Lval_t* y);
 static Lval_t* lval_take(Lval_t* v, int i);
 static Lval_t* lval_pop(Lval_t* v, int i);
-static Lval_t* lval_add(Lval_t* v, Lval_t* x);
 static Lval_t* lval_call(Lenv_t* e, Lval_t* f, Lval_t* a);
 static Lval_t* lval_copy(Lval_t* v);
 static int     lval_eq(Lval_t* x, Lval_t* y);
@@ -60,12 +62,10 @@ static Lval_t* lval_read_str(mpc_ast_t* ast);
 static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v);
 
 /* memory allocators */
-static Lval_t* lval_create_str(char* s);
 static Lval_t* lval_create_exit(void);
 static Lval_t* lval_create_bool(bool x);
 static Lval_t* lval_create_double(double x);
 static Lval_t* lval_create_long(long x);
-static Lval_t* lval_create_sexpr(void);
 static Lval_t* lval_create_qexpr(void);
 static Lval_t* lval_create_err(char* fmt, ...);
 static Lval_t* lval_create_sym(char* symbol);
@@ -239,6 +239,11 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "&&", builtin_and);
     lenv_add_builtin(e, "||", builtin_or);
 
+    /* user interaction */
+    lenv_add_builtin(e, "load",  builtin_load);
+    lenv_add_builtin(e, "print", builtin_print);
+    lenv_add_builtin(e, "error", builtin_error);
+
     /* functions */
     lenv_add_builtin(e, "def", builtin_def);
     lenv_add_builtin(e, "=",   builtin_put);
@@ -271,6 +276,60 @@ Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
     return v;
 }
 
+Lval_t* lval_create_sexpr(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_SEXPR;
+    v->count = 0;
+    v->cell = NULL;
+    return v;
+}
+
+Lval_t* lval_create_str(char* s) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_STR;
+    v->str = malloc(strlen(s) + 1);
+    strcpy(v->str, s);
+    return v;
+}
+
+Lval_t* lval_add(Lval_t* v, Lval_t* x) {
+    v->count++;
+    v->cell = realloc(v->cell, sizeof(Lval_t*) * v->count);
+    v->cell[v->count - 1] = x;
+    return v;
+}
+
+
+Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM("load", a, 1);
+    LASSERT_TYPE("load", a, 0, LVAL_STR);
+
+    mpc_result_t r;
+    if (mpc_parse_contents(a->cell[0]->str, pickle_lisp, &r)) {
+        Lval_t* expr = lval_read(r.output);
+        mpc_ast_delete(r.output);
+
+        while (expr->count) {
+            Lval_t* x = lval_eval(e, lval_pop(expr, 0));
+            if (x->type == LVAL_ERR) lval_println(x);
+            lval_del(x);
+        }
+
+        lval_del(expr);
+        lval_del(a);
+        return lval_create_sexpr();
+    } else {
+        char* err_msg = mpc_err_string(r.error);
+        mpc_err_delete(r.error);
+
+        Lval_t* err = lval_create_err("Could not load library. %s", err_msg);
+        free(err_msg);
+        lval_del(a);
+
+        return err;
+    }
+}
+
 static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v) {
     for (int i = 0; i < v->count; ++i) {
         v->cell[i] = lval_eval(e, v->cell[i]);
@@ -296,14 +355,6 @@ static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v) {
     Lval_t* res = lval_call(e, fn, v);
     lval_del(fn);
     return res;
-}
-
-static Lval_t* lval_create_str(char* s) {
-    Lval_t* v = malloc(sizeof(Lval_t));
-    v->type = LVAL_STR;
-    v->str = malloc(strlen(s) + 1);
-    strcpy(v->str, s);
-    return v;
 }
 
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
@@ -374,14 +425,6 @@ static Lval_t* lval_create_double(double x) {
     return v;
 }
 
-static Lval_t* lval_create_sexpr(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
-    v->type = LVAL_SEXPR;
-    v->count = 0;
-    v->cell = NULL;
-    return v;
-}
-
 static Lval_t* lval_create_qexpr(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_QEXPR;
@@ -417,13 +460,6 @@ static Lval_t* lval_read_str(mpc_ast_t* ast) {
     Lval_t* str = lval_create_str(unescaped);
     free(unescaped);
     return str;
-}
-
-static Lval_t* lval_add(Lval_t* v, Lval_t* x) {
-    v->count++;
-    v->cell = realloc(v->cell, sizeof(Lval_t*) * v->count);
-    v->cell[v->count - 1] = x;
-    return v;
 }
 
 /*
@@ -1108,4 +1144,22 @@ static void lval_print_str(Lval_t* v) {
     escaped = mpcf_escape(escaped);
     printf("\"%s\"", escaped);
     free(escaped);
+}
+
+static Lval_t* builtin_print(Lenv_t* e, Lval_t* a) {
+    for (int i = 0; i < a->count; ++i) {
+        lval_print(a->cell[i]);
+        putchar(' ');
+    }
+    putchar('\n');
+    lval_del(a);
+    return lval_create_sexpr();
+}
+
+static Lval_t* builtin_error(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM("error", a, 1);
+    LASSERT_TYPE("error", a, 0, LVAL_STR);
+    Lval_t* err = lval_create_err(a->cell[0]->str);
+    lval_del(a);
+    return err;
 }
