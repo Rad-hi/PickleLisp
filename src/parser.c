@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     lenv_add_builtins(e);
 
     puts(LANG_NAME" Version 666.69.420");
-    puts("exit() or Ctrl+C to Exit\n");
+    puts("`exit` or Ctrl+C to Exit\n");
 
     mpc_result_t r;
     while(true) {
@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
             mpc_ast_print(r.output);
 #endif
             Lval_t* res = lval_eval(e, lval_read(r.output));
-            bool exit_REPL = res->type == LVAL_EXIT__;
+            bool exit_REPL = res->type == LVAL_EXIT;
             lval_println(res);
 
             lval_del(res);

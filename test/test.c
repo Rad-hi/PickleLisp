@@ -27,6 +27,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
 #endif
             break;
         }
+        case LVAL_BOOL:
         case LVAL_INTEGER: {
             bool cond = val->num.li == expected.num.li;
             PRINT_VERDICT(cond, test_name);
@@ -47,7 +48,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
         case LVAL_QEXPR:
         case LVAL_SYM:
         case LVAL_FN:
-        case LVAL_EXIT__:
+        case LVAL_EXIT:
             break;
   }
 }
@@ -69,6 +70,13 @@ static Lval_t get_lval_double(double value) {
 static Lval_t get_lval_long(long value) {
     return (Lval_t){
         .type = LVAL_INTEGER,
+        .num.li = value
+    };
+}
+
+static Lval_t get_lval_bool(bool value) {
+    return (Lval_t){
+        .type = LVAL_BOOL,
         .num.li = value
     };
 }
@@ -227,6 +235,85 @@ static void test_QExpressions(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
+static void test_Boolean(mpc_parser_t* language, Lenv_t* e) {
+    test_statement_t tests[] = {
+        {
+            .name = "Boolean `||`",
+            .statement = "|| 1 0",
+            .expected = get_lval_bool(true)
+        },
+        {
+            .name = "Boolean `&&`",
+            .statement = "&& 1 0",
+            .expected = get_lval_bool(false)
+        },
+        {
+            .name = "Boolean expressions",
+            .statement = "|| (&& 0 false) (! true)",
+            .expected = get_lval_bool(false)
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strcmp(tests[i].statement, "end") != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
+static void test_Conditional(mpc_parser_t* language, Lenv_t* e) {
+    test_statement_t tests[] = {
+        {
+            .name = "Conditional simple if",
+            .statement = "if true {+ 209 211} {- 1 1}",
+            .expected = get_lval_long(420)
+        },
+        {
+            .name = "Conditional simple if 2.0",
+            .statement = "if false {+ 1 1} {+ 34 35}",
+            .expected = get_lval_long(69)
+        },
+        {
+            .name = "Conditional expressions",
+            .statement = "if (== exit true) {+ 666 0} {* 1. .5}",
+            .expected = get_lval_double(0.5)
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strcmp(tests[i].statement, "end") != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
+
 static void test_fn(mpc_parser_t* language, Lenv_t* e) {
     /*
         STEP ZERO: Define the unit test for the `sum` function
@@ -370,6 +457,8 @@ int main(int argc, char** argv) {
     test_NonNumber_err(language, e);
     test_QExpressions(language, e);
     test_fn(language, e);
+    test_Boolean(language, e);
+    test_Conditional(language, e);
 
     cleanup();
     lenv_del(e);

@@ -14,7 +14,6 @@ static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_list(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a);
-static Lval_t* builtin_exit(Lenv_t* e, Lval_t* a);
 
 static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a);
@@ -33,10 +32,12 @@ static Lval_t* builtin_gt(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_lt(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_ge(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_le(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_not(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_and(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_or(Lenv_t* e, Lval_t* a);
 
 /* lenv manipulators */
+static void    lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val);
 static void    lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
 static void    lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v);
 static void    lenv_def(Lenv_t* e, Lval_t* k, Lval_t* v);
@@ -58,6 +59,8 @@ static Lval_t* lval_read_long(mpc_ast_t* ast);
 static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v);
 
 /* memory allocators */
+static Lval_t* lval_create_exit(void);
+static Lval_t* lval_create_bool(bool x);
 static Lval_t* lval_create_double(double x);
 static Lval_t* lval_create_long(long x);
 static Lval_t* lval_create_sexpr(void);
@@ -68,7 +71,7 @@ static Lval_t* lval_create_fn(Lbuiltin_t fn);
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 
 /* Misc */
-static void lval_expr_print(Lval_t* v, char open, char close);
+static void  lval_expr_print(Lval_t* v, char open, char close);
 static char* ltype_name(LVAL_e t);
 
 /*
@@ -77,7 +80,6 @@ static char* ltype_name(LVAL_e t);
 */
 static void _register_builtin_name(char* name);
 static bool _lookup_builtin_name(char* name);
-void _del_builtin_names(void);
 typedef struct {
     char** names;
     int count;
@@ -130,8 +132,10 @@ void lval_del(Lval_t* v) {
             }
             break;
         }
+
+        case LVAL_EXIT:
+        case LVAL_BOOL:
         case LVAL_INTEGER:
-        case LVAL_EXIT__:
         case LVAL_DECIMAL: break;
 
         case LVAL_ERR: free(v->err); break;
@@ -153,11 +157,12 @@ void lval_print(Lval_t* v) {
     switch (v->type) {
         case LVAL_INTEGER: printf("%li", v->num.li); break;
         case LVAL_DECIMAL: printf("%f", v->num.f); break;
+        case LVAL_BOOL:    printf("%s", v->num.li ? "true" : "false"); break;
         case LVAL_ERR:     printf("[ERROR] %s", v->err); break;
         case LVAL_SYM:     printf("%s", v->sym); break;
         case LVAL_SEXPR:   lval_expr_print(v, '(', ')'); break;
         case LVAL_QEXPR:   lval_expr_print(v, '{', '}'); break;
-        case LVAL_EXIT__:  printf("exiting"); break;
+        case LVAL_EXIT:    printf("Exiting"); break;
         case LVAL_FN: {
             if (v->builtin != NULL) {
                 printf("<builtin>");
@@ -165,7 +170,8 @@ void lval_print(Lval_t* v) {
                 printf("(\\ ");
                 lval_print(v->formals);
                 putchar(' ');
-                lval_print(v->body); putchar(')');
+                lval_print(v->body);
+                putchar(')');
             }
             break;
         }
@@ -207,12 +213,12 @@ void lenv_add_builtins(Lenv_t* e) {
     /* mathematical functions */
     lenv_add_builtin(e, "min", builtin_min);
     lenv_add_builtin(e, "max", builtin_max);
-    lenv_add_builtin(e, "+", builtin_add);
-    lenv_add_builtin(e, "-", builtin_sub);
-    lenv_add_builtin(e, "*", builtin_mul);
-    lenv_add_builtin(e, "/", builtin_div);
-    lenv_add_builtin(e, "%", builtin_mod);
-    lenv_add_builtin(e, "^", builtin_pow);
+    lenv_add_builtin(e, "+",   builtin_add);
+    lenv_add_builtin(e, "-",   builtin_sub);
+    lenv_add_builtin(e, "*",   builtin_mul);
+    lenv_add_builtin(e, "/",   builtin_div);
+    lenv_add_builtin(e, "%",   builtin_mod);
+    lenv_add_builtin(e, "^",   builtin_pow);
 
     /* comparisons */
     lenv_add_builtin(e, "if", builtin_if);
@@ -222,17 +228,20 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "<",  builtin_lt);
     lenv_add_builtin(e, ">=", builtin_ge);
     lenv_add_builtin(e, "<=", builtin_le);
+    lenv_add_builtin(e, "!",  builtin_not);
     lenv_add_builtin(e, "&&", builtin_and);
     lenv_add_builtin(e, "||", builtin_or);
 
-    /* variable functions */
+    /* functions */
     lenv_add_builtin(e, "def", builtin_def);
-    lenv_add_builtin(e, "=", builtin_put);
-    lenv_add_builtin(e, "\\", builtin_lambda);
-    lenv_add_builtin(e, "fn", builtin_fn);
+    lenv_add_builtin(e, "=",   builtin_put);
+    lenv_add_builtin(e, "\\",  builtin_lambda);
+    lenv_add_builtin(e, "fn",  builtin_fn);
 
-    /* behavioral methods */
-    lenv_add_builtin(e, "exit", builtin_exit);
+    /* variables */
+    lenv_add_builtin_const(e, "true",  lval_create_bool(true));
+    lenv_add_builtin_const(e, "false", lval_create_bool(false));
+    lenv_add_builtin_const(e, "exit",  lval_create_exit());
 }
 
 void _del_builtin_names(void) {
@@ -320,6 +329,19 @@ static Lval_t* lval_create_err(char* fmt, ...) {
 
     va_end(va);
 
+    return v;
+}
+
+static Lval_t* lval_create_exit(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_EXIT;
+    return v;
+}
+
+static Lval_t* lval_create_bool(bool x) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_BOOL;
+    v->num.li = x;
     return v;
 }
 
@@ -476,7 +498,7 @@ static Lval_t* builtin_pow(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "^");
 
 static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
     for (int i = 0; i < a->count; ++i) {
-        if (a->cell[i]->type != LVAL_INTEGER && a->cell[i]->type != LVAL_DECIMAL) {
+        if (!IS_NUM(a, i)) {
             char* type = ltype_name(a->cell[i]->type);
             lval_del(a);
             return lval_create_err("Operator `%s` cannot operate on non-numbers; "
@@ -485,6 +507,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
     }
 
     Lval_t* x = lval_pop(a, 0);
+    if (x->type == LVAL_BOOL) x->type = LVAL_INTEGER;
 
     // no arguments provided and `op` is `-` then perform negation
     if ((strcmp(op, "-") == 0) && a->count == 0) {
@@ -494,6 +517,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
 
     while (a->count > 0) {
         Lval_t* y = lval_pop(a, 0);
+        if (y->type == LVAL_BOOL) y->type = LVAL_INTEGER;
 
         // if any one of inuts is a decimal, output will be decimal
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
@@ -562,15 +586,14 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
 static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
     LASSERT(a, a->count >= 2, "Function `min` expects at least 2 arguments, got [%i]", a->count);
     for (int i = 0; i < a->count; ++i) {
-        bool cond = a->cell[i]->type == LVAL_INTEGER || a->cell[i]->type == LVAL_DECIMAL;
-        LASSERT(a, cond, "Function `min` expects arguments of type Number,"
-                         " but arg [%i] is of type [%s]",
-                         i + 1, ltype_name(a->cell[i]->type));
+        LASSERT(a, IS_NUM(a, i), "Function `min` expects arguments of type Number,"
+                                 " but arg [%i] is of type [%s]",
+                                 i + 1, ltype_name(a->cell[i]->type));
     }
 
     Lval_t* x = lval_pop(a, 0);
-    while (a->count) {
-        Lval_t* y = lval_pop(a, 0);
+    for (int i = 0; i < a->count; ++i) {
+        Lval_t* y = a->cell[i];
 
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
             if (y->type != LVAL_DECIMAL) {
@@ -584,7 +607,6 @@ static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
         } else {
             x->num.li = min(x->num.li, y->num.li);  
         }
-        lval_del(y);
     }
 
     lval_del(a);
@@ -594,15 +616,14 @@ static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
 static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
     LASSERT(a, a->count >= 2, "Function `max` expects at least 2 arguments, got [%i]", a->count);
     for (int i = 0; i < a->count; ++i) {
-        bool cond = a->cell[i]->type == LVAL_INTEGER || a->cell[i]->type == LVAL_DECIMAL;
-        LASSERT(a, cond, "Function `max` expects arguments of type Number,"
-                         " but arg [%i] is of type [%s]",
-                         i + 1, ltype_name(a->cell[i]->type));
+        LASSERT(a, IS_NUM(a, i), "Function `max` expects arguments of type Number,"
+                                 " but arg [%i] is of type [%s]",
+                                 i + 1, ltype_name(a->cell[i]->type));
     }
 
     Lval_t* x = lval_pop(a, 0);
-    while (a->count) {
-        Lval_t* y = lval_pop(a, 0);
+    for (int i = 0; i < a->count; ++i) {
+        Lval_t* y = a->cell[i];
 
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
             if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
@@ -614,7 +635,6 @@ static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
         } else {
             x->num.li = max(x->num.li, y->num.li);  
         }
-        lval_del(y);
     }
 
     lval_del(a);
@@ -630,16 +650,18 @@ static Lval_t* builtin_or(Lenv_t* e, Lval_t* a)  { return builtin_ord(e, a, "||"
 
 static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
     LASSERT(a, a->count == 2, "Operator `%s` expects 2 arguments, got [%i]", op, a->count);
-    for (int i = 0; i < a->count; ++i) {
-        bool cond = a->cell[i]->type == LVAL_INTEGER || a->cell[i]->type == LVAL_DECIMAL;
-        LASSERT(a, cond, "Operator `%s` expects arguments of type Number,"
-                         " but arg [%i] is of type [%s]",
-                         op, i + 1, ltype_name(a->cell[i]->type));
-    }
 
-    Lval_t* x = lval_pop(a, 0);
-    Lval_t* y = lval_pop(a, 0);
+    Lval_t* x = a->cell[0];
+    LASSERT(a, IS_NUM(a, 0), "Operator `%s` expects arguments of type Number,"
+                             " but arg [%i] is of type [%s]",
+                             op, 1, ltype_name(x->type));
 
+    Lval_t* y = a->cell[1];
+    LASSERT(a, IS_NUM(a, 1), "Operator `%s` expects arguments of type Number,"
+                             " but arg [%i] is of type [%s]",
+                             op, 2, ltype_name(y->type));
+
+    Lval_t* res = lval_create_bool(false);
     if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
         if (y->type != LVAL_DECIMAL) {
             y->type = LVAL_DECIMAL;
@@ -648,24 +670,39 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
             x->type = LVAL_DECIMAL;
             x->num.f = (double)x->num.li;
         }
-        if (strcmp(op, ">") == 0) x->num.f = x->num.f > y->num.f;
-        if (strcmp(op, "<") == 0) x->num.f = x->num.f < y->num.f;
-        if (strcmp(op, ">=") == 0) x->num.f = x->num.f >= y->num.f;
-        if (strcmp(op, "<=") == 0) x->num.f = x->num.f <= y->num.f;
-        if (strcmp(op, "&&") == 0) x->num.f = x->num.f && y->num.f;
-        if (strcmp(op, "||") == 0) x->num.f = x->num.f || y->num.f;
+        if (strcmp(op, ">") == 0) res->num.li = x->num.f > y->num.f;
+        if (strcmp(op, "<") == 0) res->num.li = x->num.f < y->num.f;
+        if (strcmp(op, ">=") == 0) res->num.li = x->num.f >= y->num.f;
+        if (strcmp(op, "<=") == 0) res->num.li = x->num.f <= y->num.f;
+        if (strcmp(op, "&&") == 0) res->num.li = x->num.f && y->num.f;
+        if (strcmp(op, "||") == 0) res->num.li = x->num.f || y->num.f;
     } else {
-        if (strcmp(op, ">") == 0) x->num.li = x->num.li > y->num.li;
-        if (strcmp(op, "<") == 0) x->num.li = x->num.li < y->num.li;
-        if (strcmp(op, ">=") == 0) x->num.li = x->num.li >= y->num.li;
-        if (strcmp(op, "<=") == 0) x->num.li = x->num.li <= y->num.li;
-        if (strcmp(op, "&&") == 0) x->num.li = x->num.li && y->num.li;
-        if (strcmp(op, "||") == 0) x->num.li = x->num.li || y->num.li;
+        if (strcmp(op, ">") == 0) res->num.li = x->num.li > y->num.li;
+        if (strcmp(op, "<") == 0) res->num.li = x->num.li < y->num.li;
+        if (strcmp(op, ">=") == 0) res->num.li = x->num.li >= y->num.li;
+        if (strcmp(op, "<=") == 0) res->num.li = x->num.li <= y->num.li;
+        if (strcmp(op, "&&") == 0) res->num.li = x->num.li && y->num.li;
+        if (strcmp(op, "||") == 0) res->num.li = x->num.li || y->num.li;
     }
 
-    lval_del(y);
     lval_del(a);
-    return x;
+    return res;
+}
+
+static Lval_t* builtin_not(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM("!", a, 1);
+    if (a->cell[0]->type == LVAL_DECIMAL) {
+        a->cell[0]->type = LVAL_BOOL;
+        a->cell[0]->num.li = (long)a->cell[0]->num.f;
+    } else if (a->cell[0]->type == LVAL_INTEGER) {
+        a->cell[0]->type = LVAL_BOOL;
+        a->cell[0]->num.li = (long)a->cell[0]->num.li;
+    }
+    LASSERT_TYPE("!", a, 0, LVAL_BOOL);
+
+    bool res = !(bool)(a->cell[0]->num.li);
+    lval_del(a);
+    return lval_create_bool(res);
 }
 
 /*
@@ -675,7 +712,9 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
     if (x->type != y->type) return 0;
 
     switch (x->type) {
-        case LVAL_INTEGER: return x->num.li == y->num.li;
+        case LVAL_BOOL:
+        case LVAL_INTEGER:
+            return x->num.li == y->num.li;
         case LVAL_DECIMAL: return x->num.f == y->num.f;
 
         case LVAL_ERR: return strcmp(x->err, y->err) == 0;
@@ -695,7 +734,7 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
             return 1;
         }
 
-        case LVAL_EXIT__: return 1;
+        case LVAL_EXIT: return 1;
     }
     return 0;
 }
@@ -706,22 +745,24 @@ static Lval_t* builtin_ne(Lenv_t* e, Lval_t* a) { return builtin_cmp(e, a, "!=")
 static Lval_t* builtin_cmp(Lenv_t* e, Lval_t* a, char* op) {
     LASSERT_NUM(op, a, 2);
 
-    int res;
+    bool res;
     if (strcmp(op, "==") == 0) res = lval_eq(a->cell[0], a->cell[1]);
     if (strcmp(op, "!=") == 0) res = !lval_eq(a->cell[0], a->cell[1]);
 
     lval_del(a);
-    return lval_create_long(res);
+    return lval_create_bool(res);
 }
 
 static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM("if", a, 3);
-    
+
     if (a->cell[0]->type == LVAL_DECIMAL) {
-        a->cell[0]->type = LVAL_INTEGER;
+        a->cell[0]->type = LVAL_BOOL;
         a->cell[0]->num.li = (long)a->cell[0]->num.f;
     }
-    LASSERT_TYPE("if", a, 0, LVAL_INTEGER);
+    if (a->cell[0]->type == LVAL_INTEGER) a->cell[0]->type = LVAL_BOOL;
+ 
+    LASSERT_TYPE("if", a, 0, LVAL_BOOL);
     LASSERT_TYPE("if", a, 1, LVAL_QEXPR);
     LASSERT_TYPE("if", a, 2, LVAL_QEXPR);
 
@@ -796,39 +837,34 @@ static Lval_t* builtin_put(Lenv_t* e, Lval_t* a) {
 static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn) {
     LASSERT_TYPE(fn, a, 0, LVAL_QEXPR);
 
-    Lval_t* syms = a->cell[0];
+    Lval_t* symbols = a->cell[0];
 
-    for (int i = 0; i < syms->count; ++i) {
-        LASSERT(a, syms->cell[i]->type == LVAL_SYM,
+    for (int i = 0; i < symbols->count; ++i) {
+        LASSERT(a, symbols->cell[i]->type == LVAL_SYM,
             "Function `%s` cannot define a non-symbol; arg number [%i] "
-            "is of type [%s]", fn, i + 1, ltype_name(syms->cell[i]->type));
+            "is of type [%s]", fn, i + 1, ltype_name(symbols->cell[i]->type));
     }
 
-    LASSERT(a, syms->count == a->count - 1,
+    LASSERT(a, symbols->count == a->count - 1,
         "Function `%s` expects #symbols == #values; "
         "we got [%i] symbols, and [%i] values",
-        fn, syms->count, a->count - 1);
+        fn, symbols->count, a->count - 1);
 
-    for (int i = 0; i < syms->count; ++i) {
-        if (_lookup_builtin_name(syms->cell[i]->sym)) {
+    for (int i = 0; i < symbols->count; ++i) {
+        if (_lookup_builtin_name(symbols->cell[i]->sym)) {
             LASSERT(a, false, "Function `%s` cannot define arg number [%i]"
                               " named '%s'; builtin keyword!",
-                              fn, i + 1, syms->cell[i]->sym);
+                              fn, i + 1, symbols->cell[i]->sym);
         }
     }
 
-    for (int i = 0; i < syms->count; ++i) {
-        if (strcmp(fn, "def") == 0) lenv_def(e, syms->cell[i], a->cell[i + 1]);
-        if (strcmp(fn, "=") == 0)   lenv_put(e, syms->cell[i], a->cell[i + 1]);
+    for (int i = 0; i < symbols->count; ++i) {
+        if (strcmp(fn, "def") == 0) lenv_def(e, symbols->cell[i], a->cell[i + 1]);
+        if (strcmp(fn, "=") == 0)   lenv_put(e, symbols->cell[i], a->cell[i + 1]);
     }
 
     lval_del(a);
     return lval_create_sexpr();
-}
-
-static Lval_t* builtin_exit(Lenv_t* e, Lval_t* a) {
-    a->type = LVAL_EXIT__;
-    return a;
 }
 
 static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
@@ -895,8 +931,13 @@ static Lval_t* lval_copy(Lval_t* v) {
             }
             break;
         }
-        case LVAL_DECIMAL: x->num.li = v->num.li; break;
-        case LVAL_INTEGER: x->num.f = v->num.f; break;
+
+        case LVAL_DECIMAL:
+            x->num.f = v->num.f; break;
+
+        case LVAL_BOOL:
+        case LVAL_INTEGER:
+            x->num.li = v->num.li; break;
 
         case LVAL_ERR: {
             x->err = malloc(strlen(v->err) + 1);
@@ -918,14 +959,19 @@ static Lval_t* lval_copy(Lval_t* v) {
             }
             break;
         }
-        case LVAL_EXIT__: break;
+        case LVAL_EXIT: break;
     }
     return x;
 }
 
+static void lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val) {
+    _register_builtin_name(name);
+    lenv_def(e, lval_create_sym(name), val);
+
+}
+
 static void lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn) {
     _register_builtin_name(name);
-
     Lval_t* k = lval_create_sym(name);
     Lval_t* v = lval_create_fn(fn);
     lenv_put(e, k, v);
@@ -1005,12 +1051,13 @@ static char* ltype_name(LVAL_e t) {
     switch (t) {
         case LVAL_INTEGER:
         case LVAL_DECIMAL:  return "Number";
+        case LVAL_BOOL:     return "Boolean";
         case LVAL_ERR:      return "Error";
         case LVAL_SYM:      return "Symbol";
         case LVAL_FN:       return "Function";
         case LVAL_SEXPR:    return "S-Expression";
         case LVAL_QEXPR:    return "Q-Expression";
-        case LVAL_EXIT__:   return "Exit";
+        case LVAL_EXIT:   return "Exit";
         default: return "Your language is falling apart!";
     }
 }

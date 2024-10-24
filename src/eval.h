@@ -10,6 +10,11 @@
 #define min(a, b)       ((a) > (b) ? (b) : (a))
 #define max(a, b)       ((a) > (b) ? (a) : (b))
 
+#define IS_NUM(a, idx)                    \
+    (a->cell[idx]->type == LVAL_INTEGER   \
+    || a->cell[idx]->type == LVAL_DECIMAL \
+    || a->cell[idx]->type == LVAL_BOOL)
+
 #define LASSERT(arg, cond, fmt, ...)                        \
     if (!(cond)) {                                          \
         Lval_t* err = lval_create_err(fmt, ##__VA_ARGS__);  \
@@ -37,12 +42,13 @@ typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
 typedef enum {
     LVAL_INTEGER,
     LVAL_DECIMAL,
+    LVAL_BOOL,
     LVAL_ERR,
     LVAL_SYM,
     LVAL_FN,
     LVAL_SEXPR,
     LVAL_QEXPR,
-    LVAL_EXIT__,
+    LVAL_EXIT,
 } LVAL_e;
 
 typedef union {
