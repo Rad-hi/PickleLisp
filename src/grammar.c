@@ -3,6 +3,8 @@
 #define NUM_PARSERS 10
 static mpc_parser_t* parsers[NUM_PARSERS];
 
+mpc_parser_t* pickle_lisp;
+
 // defined in eval.c
 extern void _del_builtin_names();
 
