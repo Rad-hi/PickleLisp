@@ -43,6 +43,7 @@ typedef enum {
     LVAL_INTEGER,
     LVAL_DECIMAL,
     LVAL_BOOL,
+    LVAL_STR,
     LVAL_ERR,
     LVAL_SYM,
     LVAL_FN,
@@ -70,6 +71,7 @@ struct Lval_t {
     /* Lval_t can only represent one at a time */
     union {
         Numeric_u num;
+        char* str;
         char* err;
         char* sym;
         Lbuiltin_t builtin;

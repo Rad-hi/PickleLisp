@@ -56,9 +56,11 @@ static int     lval_eq(Lval_t* x, Lval_t* y);
 /* Parsers */
 static Lval_t* lval_read_double(mpc_ast_t* ast);
 static Lval_t* lval_read_long(mpc_ast_t* ast);
+static Lval_t* lval_read_str(mpc_ast_t* ast);
 static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v);
 
 /* memory allocators */
+static Lval_t* lval_create_str(char* s);
 static Lval_t* lval_create_exit(void);
 static Lval_t* lval_create_bool(bool x);
 static Lval_t* lval_create_double(double x);
@@ -73,6 +75,7 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 /* Misc */
 static void  lval_expr_print(Lval_t* v, char open, char close);
 static char* ltype_name(LVAL_e t);
+static void lval_print_str(Lval_t* v);
 
 /*
     Keep a record of all builtin names that exist in the language,
@@ -98,7 +101,8 @@ static Builtins_record_t __builtins__ = {
 Lval_t* lval_read(mpc_ast_t* ast) {
     if (strstr(ast->tag, "integer")) return lval_read_long(ast);
     if (strstr(ast->tag, "decimal")) return lval_read_double(ast);
-    if (strstr(ast->tag, "symbol")) return lval_create_sym(ast->contents);
+    if (strstr(ast->tag, "string"))  return lval_read_str(ast);
+    if (strstr(ast->tag, "symbol"))  return lval_create_sym(ast->contents);
 
     Lval_t* x = NULL;
     if (strcmp(ast->tag, ">") == 0) x = lval_create_sexpr();
@@ -106,6 +110,7 @@ Lval_t* lval_read(mpc_ast_t* ast) {
     if (strstr(ast->tag, "qexpr")) x = lval_create_qexpr();
 
     for (int i = 0; i < ast->children_num; ++i) {
+        if (strstr(ast->children[i]->tag,     "comment")) continue;
         if (strcmp(ast->children[i]->contents, "(") == 0) continue;
         if (strcmp(ast->children[i]->contents, ")") == 0) continue;
         if (strcmp(ast->children[i]->contents, "{") == 0) continue;
@@ -138,6 +143,7 @@ void lval_del(Lval_t* v) {
         case LVAL_INTEGER:
         case LVAL_DECIMAL: break;
 
+        case LVAL_STR: free(v->str); break;
         case LVAL_ERR: free(v->err); break;
         case LVAL_SYM: free(v->sym); break;
 
@@ -159,6 +165,7 @@ void lval_print(Lval_t* v) {
         case LVAL_DECIMAL: printf("%f", v->num.f); break;
         case LVAL_BOOL:    printf("%s", v->num.li ? "true" : "false"); break;
         case LVAL_ERR:     printf("[ERROR] %s", v->err); break;
+        case LVAL_STR:     lval_print_str(v); break;
         case LVAL_SYM:     printf("%s", v->sym); break;
         case LVAL_SEXPR:   lval_expr_print(v, '(', ')'); break;
         case LVAL_QEXPR:   lval_expr_print(v, '{', '}'); break;
@@ -291,6 +298,14 @@ static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v) {
     return res;
 }
 
+static Lval_t* lval_create_str(char* s) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_STR;
+    v->str = malloc(strlen(s) + 1);
+    strcpy(v->str, s);
+    return v;
+}
+
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_FN;
@@ -389,6 +404,19 @@ static Lval_t* lval_read_double(mpc_ast_t* ast) {
     return errno != ERANGE
         ? lval_create_double(x)
         : lval_create_err("Number is out of range for double `%s`", ast->contents);
+}
+
+static Lval_t* lval_read_str(mpc_ast_t* ast) {
+    ast->contents[strlen(ast->contents) - 1] = '\0';
+
+    // copy the string without the first quotation mark
+    char* unescaped = malloc(strlen(ast->contents + 1) + 1);
+    strcpy(unescaped, ast->contents + 1);
+
+    unescaped = mpcf_unescape(unescaped);
+    Lval_t* str = lval_create_str(unescaped);
+    free(unescaped);
+    return str;
 }
 
 static Lval_t* lval_add(Lval_t* v, Lval_t* x) {
@@ -717,6 +745,7 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
             return x->num.li == y->num.li;
         case LVAL_DECIMAL: return x->num.f == y->num.f;
 
+        case LVAL_STR: return strcmp(x->str, y->str) == 0;
         case LVAL_ERR: return strcmp(x->err, y->err) == 0;
         case LVAL_SYM: return strcmp(x->sym, y->sym) == 0;
         
@@ -939,6 +968,11 @@ static Lval_t* lval_copy(Lval_t* v) {
         case LVAL_INTEGER:
             x->num.li = v->num.li; break;
 
+        case LVAL_STR: {
+            x->str = malloc(strlen(v->str) + 1);
+            strcpy(x->str, v->str);
+            break;
+        }
         case LVAL_ERR: {
             x->err = malloc(strlen(v->err) + 1);
             strcpy(x->err, v->err);
@@ -1053,6 +1087,7 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_DECIMAL:  return "Number";
         case LVAL_BOOL:     return "Boolean";
         case LVAL_ERR:      return "Error";
+        case LVAL_STR:      return "String";
         case LVAL_SYM:      return "Symbol";
         case LVAL_FN:       return "Function";
         case LVAL_SEXPR:    return "S-Expression";
@@ -1060,4 +1095,17 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_EXIT:   return "Exit";
         default: return "Your language is falling apart!";
     }
+}
+
+/*
+    The goal of this function is to print the input string
+    (from the user) after evaluating the escape sequences
+*/
+static void lval_print_str(Lval_t* v) {
+    char* escaped = malloc(strlen(v->str) + 1);
+    strcpy(escaped, v->str);
+
+    escaped = mpcf_escape(escaped);
+    printf("\"%s\"", escaped);
+    free(escaped);
 }
