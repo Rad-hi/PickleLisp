@@ -24,7 +24,7 @@ mpc_parser_t* create_lang() {
         "integer : /-?[0-9]+/ ;"
         "decimal : /-?[0-9]*['.'][0-9]*[fF]?/ ;"
         "number  : <decimal> | <integer> ;"
-        "symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&^%]+/ ;"
+        "symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&^%|]+/ ;"
         "sexpr   : '(' <expr>* ')' ;"
         "qexpr   : '{' <expr>* '}' ;"
         "expr    : <number> | <symbol> | <sexpr> | <qexpr> ;"

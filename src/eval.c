@@ -15,16 +15,31 @@ static Lval_t* builtin_list(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_exit(Lenv_t* e, Lval_t* a);
+
 static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_if(Lenv_t* e, Lval_t* a);
+
 static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn);
 static Lval_t* builtin_def(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_put(Lenv_t* e, Lval_t* a);
-static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a);
+
+static Lval_t* builtin_cmp(Lenv_t* e, Lval_t* a, char* op);
+static Lval_t* builtin_eq(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_ne(Lenv_t* e, Lval_t* a);
+
+static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op);
+static Lval_t* builtin_gt(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_lt(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_ge(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_le(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_and(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_or(Lenv_t* e, Lval_t* a);
 
 /* lenv manipulators */
-static void lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
-static void lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v);
-static void lenv_def(Lenv_t* e, Lval_t* k, Lval_t* v);
+static void    lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
+static void    lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v);
+static void    lenv_def(Lenv_t* e, Lval_t* k, Lval_t* v);
 static Lval_t* lenv_get(Lenv_t* e, Lval_t* k);
 static Lenv_t* lenv_copy(Lenv_t* e);
 
@@ -35,6 +50,7 @@ static Lval_t* lval_pop(Lval_t* v, int i);
 static Lval_t* lval_add(Lval_t* v, Lval_t* x);
 static Lval_t* lval_call(Lenv_t* e, Lval_t* f, Lval_t* a);
 static Lval_t* lval_copy(Lval_t* v);
+static int     lval_eq(Lval_t* x, Lval_t* y);
 
 /* Parsers */
 static Lval_t* lval_read_double(mpc_ast_t* ast);
@@ -197,6 +213,17 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "/", builtin_div);
     lenv_add_builtin(e, "%", builtin_mod);
     lenv_add_builtin(e, "^", builtin_pow);
+
+    /* comparisons */
+    lenv_add_builtin(e, "if", builtin_if);
+    lenv_add_builtin(e, "==", builtin_eq);
+    lenv_add_builtin(e, "!=", builtin_ne);
+    lenv_add_builtin(e, ">",  builtin_gt);
+    lenv_add_builtin(e, "<",  builtin_lt);
+    lenv_add_builtin(e, ">=", builtin_ge);
+    lenv_add_builtin(e, "<=", builtin_le);
+    lenv_add_builtin(e, "&&", builtin_and);
+    lenv_add_builtin(e, "||", builtin_or);
 
     /* variable functions */
     lenv_add_builtin(e, "def", builtin_def);
@@ -440,24 +467,12 @@ static Lval_t* lval_take(Lval_t* v, int i) {
     return x;
 }
 
-static Lval_t* builtin_add(Lenv_t* e, Lval_t* a){
-    return builtin_op(e, a, "+");
-}
-static Lval_t* builtin_sub(Lenv_t* e, Lval_t* a){
-    return builtin_op(e, a, "-");
-}
-static Lval_t* builtin_mul(Lenv_t* e, Lval_t* a){
-    return builtin_op(e, a, "*");
-}
-static Lval_t* builtin_div(Lenv_t* e, Lval_t* a){
-    return builtin_op(e, a, "/");
-}
-static Lval_t* builtin_mod(Lenv_t* e, Lval_t* a){
-    return builtin_op(e, a, "%");
-}
-static Lval_t* builtin_pow(Lenv_t* e, Lval_t* a){
-    return builtin_op(e, a, "^");
-}
+static Lval_t* builtin_add(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "+"); }
+static Lval_t* builtin_sub(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "-"); }
+static Lval_t* builtin_mul(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "*"); }
+static Lval_t* builtin_div(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "/"); }
+static Lval_t* builtin_mod(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "%"); }
+static Lval_t* builtin_pow(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "^"); }
 
 static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
     for (int i = 0; i < a->count; ++i) {
@@ -482,10 +497,12 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
 
         // if any one of inuts is a decimal, output will be decimal
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
-            if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
-                y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
-            } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
-                x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
+            if (y->type != LVAL_DECIMAL) {
+                y->type = LVAL_DECIMAL; 
+                y->num.f = (double)y->num.li;
+            } else if (x->type != LVAL_DECIMAL) {
+                x->type = LVAL_DECIMAL;
+                x->num.f = (double)x->num.li;
             }
 
             if (strcmp(op, "+") == 0) x->num.f += y->num.f;
@@ -556,15 +573,18 @@ static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
         Lval_t* y = lval_pop(a, 0);
 
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
-            if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
-                y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
-            } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
-                x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
+            if (y->type != LVAL_DECIMAL) {
+                y->type = LVAL_DECIMAL;
+                y->num.f = (double)y->num.li;
+            } else if (x->type != LVAL_DECIMAL) {
+                x->type = LVAL_DECIMAL;
+                x->num.f = (double)x->num.li;
             }
             x->num.f = fmin(x->num.f, y->num.f);  
         } else {
             x->num.li = min(x->num.li, y->num.li);  
         }
+        lval_del(y);
     }
 
     lval_del(a);
@@ -594,8 +614,122 @@ static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
         } else {
             x->num.li = max(x->num.li, y->num.li);  
         }
+        lval_del(y);
     }
 
+    lval_del(a);
+    return x;
+}
+
+static Lval_t* builtin_gt(Lenv_t* e, Lval_t* a)  { return builtin_ord(e, a, ">"); }
+static Lval_t* builtin_lt(Lenv_t* e, Lval_t* a)  { return builtin_ord(e, a, "<"); }
+static Lval_t* builtin_ge(Lenv_t* e, Lval_t* a)  { return builtin_ord(e, a, ">="); }
+static Lval_t* builtin_le(Lenv_t* e, Lval_t* a)  { return builtin_ord(e, a, "<="); }
+static Lval_t* builtin_and(Lenv_t* e, Lval_t* a) { return builtin_ord(e, a, "&&"); }
+static Lval_t* builtin_or(Lenv_t* e, Lval_t* a)  { return builtin_ord(e, a, "||"); }
+
+static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
+    LASSERT(a, a->count == 2, "Operator `%s` expects 2 arguments, got [%i]", op, a->count);
+    for (int i = 0; i < a->count; ++i) {
+        bool cond = a->cell[i]->type == LVAL_INTEGER || a->cell[i]->type == LVAL_DECIMAL;
+        LASSERT(a, cond, "Operator `%s` expects arguments of type Number,"
+                         " but arg [%i] is of type [%s]",
+                         op, i + 1, ltype_name(a->cell[i]->type));
+    }
+
+    Lval_t* x = lval_pop(a, 0);
+    Lval_t* y = lval_pop(a, 0);
+
+    if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
+        if (y->type != LVAL_DECIMAL) {
+            y->type = LVAL_DECIMAL;
+            y->num.f = (double)y->num.li;
+        } else if (x->type != LVAL_DECIMAL) {
+            x->type = LVAL_DECIMAL;
+            x->num.f = (double)x->num.li;
+        }
+        if (strcmp(op, ">") == 0) x->num.f = x->num.f > y->num.f;
+        if (strcmp(op, "<") == 0) x->num.f = x->num.f < y->num.f;
+        if (strcmp(op, ">=") == 0) x->num.f = x->num.f >= y->num.f;
+        if (strcmp(op, "<=") == 0) x->num.f = x->num.f <= y->num.f;
+        if (strcmp(op, "&&") == 0) x->num.f = x->num.f && y->num.f;
+        if (strcmp(op, "||") == 0) x->num.f = x->num.f || y->num.f;
+    } else {
+        if (strcmp(op, ">") == 0) x->num.li = x->num.li > y->num.li;
+        if (strcmp(op, "<") == 0) x->num.li = x->num.li < y->num.li;
+        if (strcmp(op, ">=") == 0) x->num.li = x->num.li >= y->num.li;
+        if (strcmp(op, "<=") == 0) x->num.li = x->num.li <= y->num.li;
+        if (strcmp(op, "&&") == 0) x->num.li = x->num.li && y->num.li;
+        if (strcmp(op, "||") == 0) x->num.li = x->num.li || y->num.li;
+    }
+
+    lval_del(y);
+    lval_del(a);
+    return x;
+}
+
+/*
+    evaluate the equality of two Lvals
+*/
+static int lval_eq(Lval_t* x, Lval_t* y) {
+    if (x->type != y->type) return 0;
+
+    switch (x->type) {
+        case LVAL_INTEGER: return x->num.li == y->num.li;
+        case LVAL_DECIMAL: return x->num.f == y->num.f;
+
+        case LVAL_ERR: return strcmp(x->err, y->err) == 0;
+        case LVAL_SYM: return strcmp(x->sym, y->sym) == 0;
+        
+        case LVAL_FN: {
+            if (x->builtin || y->builtin) return x->builtin == y->builtin;
+            else return lval_eq(x->formals, y->formals) && lval_eq(x->body, y->body);
+        }
+
+        case LVAL_SEXPR:
+        case LVAL_QEXPR: {
+            if (x->count != y->count) return 0;
+            for (int i = 0; i < x->count; ++i) {
+                if (!lval_eq(x->cell[i], y->cell[i])) return 0;
+            }
+            return 1;
+        }
+
+        case LVAL_EXIT__: return 1;
+    }
+    return 0;
+}
+
+static Lval_t* builtin_eq(Lenv_t* e, Lval_t* a) { return builtin_cmp(e, a, "=="); }
+static Lval_t* builtin_ne(Lenv_t* e, Lval_t* a) { return builtin_cmp(e, a, "!="); }
+
+static Lval_t* builtin_cmp(Lenv_t* e, Lval_t* a, char* op) {
+    LASSERT_NUM(op, a, 2);
+
+    int res;
+    if (strcmp(op, "==") == 0) res = lval_eq(a->cell[0], a->cell[1]);
+    if (strcmp(op, "!=") == 0) res = !lval_eq(a->cell[0], a->cell[1]);
+
+    lval_del(a);
+    return lval_create_long(res);
+}
+
+static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM("if", a, 3);
+    
+    if (a->cell[0]->type == LVAL_DECIMAL) {
+        a->cell[0]->type = LVAL_INTEGER;
+        a->cell[0]->num.li = (long)a->cell[0]->num.f;
+    }
+    LASSERT_TYPE("if", a, 0, LVAL_INTEGER);
+    LASSERT_TYPE("if", a, 1, LVAL_QEXPR);
+    LASSERT_TYPE("if", a, 2, LVAL_QEXPR);
+
+    a->cell[1]->type = LVAL_SEXPR;
+    a->cell[2]->type = LVAL_SEXPR;
+
+    Lval_t* x = a->cell[0]->num.li ? lval_eval(e, lval_pop(a, 1))
+                                   : lval_eval(e, lval_pop(a, 2));
     lval_del(a);
     return x;
 }
