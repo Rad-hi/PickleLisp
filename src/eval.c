@@ -842,12 +842,34 @@ static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
 
 static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM("head", a, 1);
-    LASSERT_TYPE("head", a, 0, LVAL_QEXPR);
-    LASSERT(a, a->cell[0]->count != 0,
-        "Function `head` expects a non-empty [%s], got {} as input!", ltype_name(LVAL_QEXPR));
 
-    Lval_t* v = lval_take(a, 0);
-    while (v->count > 1) { lval_del(lval_pop(v, 1)); }
+    Lval_t* v = a->cell[0];
+    LASSERT(a, IS_ITERABLE(a, 0),
+            "Function `head` expects arguments of type [%s, %s], "
+            "but arg [1] is of type [%s]", ltype_name(LVAL_QEXPR),
+            ltype_name(LVAL_STR), ltype_name(v->type));
+    bool cond = (v->type == LVAL_QEXPR && v->count != 0)
+             || (v->type == LVAL_STR && strlen(v->str) > 0);
+    LASSERT(a, cond, "Function `head` expects a non-empty [%s, %s]!",
+                     ltype_name(LVAL_QEXPR), ltype_name(LVAL_STR));
+
+    v = lval_take(a, 0);  // upacks the input Q-expression
+    switch (v->type) {
+        case LVAL_QEXPR: {
+            while (v->count > 1) {
+                lval_del(lval_pop(v, 1));
+            }
+            break;
+        }
+        case LVAL_STR: {
+            v->str = realloc(v->str, 2);
+            v->str[1] = '\0';
+            break;
+        }
+        default:
+            printf("%s\n", ltype_name(v->type));
+            assert(false && "builtin_head doesn't support this type");
+    }
     return v;
 }
 
@@ -872,11 +894,8 @@ static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
         }
         case LVAL_STR: {
             const size_t len = strlen(v->str);
-            char* temp = malloc(sizeof(*v->str) * len + 1);
-            strncpy(temp, v->str, len + 1);
-            strncpy(v->str, temp + 1, len);
-            free(temp);
-            v->str = realloc(v->str, len - 1);
+            strncpy(v->str, v->str + 1, len);
+            v->str = realloc(v->str, len);
             break;
         }
         default:
