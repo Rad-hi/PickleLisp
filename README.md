@@ -16,6 +16,17 @@ cd ..
 ./src/PickleLisp examples/hello_world.pickle
 ```
 
+### Tests
+
+I wrote tests myself without using any framework, so they're weirdly implemented, and are kinda hard to modify. But, they do the job.
+
+```bash
+cd PickleLisp/test
+make clean && make
+
+./test
+```
+
 ### Syntax
 
 TODO
