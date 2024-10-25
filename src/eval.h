@@ -55,6 +55,7 @@ typedef enum {
     LVAL_SEXPR,
     LVAL_QEXPR,
     LVAL_EXIT,
+    LVAL_OK,
 } LVAL_e;
 
 typedef union {

@@ -62,6 +62,7 @@ static Lval_t* lval_read_str(mpc_ast_t* ast);
 static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v);
 
 /* memory allocators */
+static Lval_t* lval_create_ok(void);
 static Lval_t* lval_create_exit(void);
 static Lval_t* lval_create_bool(bool x);
 static Lval_t* lval_create_double(double x);
@@ -138,6 +139,7 @@ void lval_del(Lval_t* v) {
             break;
         }
 
+        case LVAL_OK:
         case LVAL_EXIT:
         case LVAL_BOOL:
         case LVAL_INTEGER:
@@ -155,6 +157,7 @@ void lval_del(Lval_t* v) {
             free(v->cell);
             break;
         }
+        default: assert(false && "you added a new type, but forgot to add it to copy!");
     }
     free(v);
 }
@@ -170,6 +173,7 @@ void lval_print(Lval_t* v) {
         case LVAL_SEXPR:   lval_expr_print(v, '(', ')'); break;
         case LVAL_QEXPR:   lval_expr_print(v, '{', '}'); break;
         case LVAL_EXIT:    printf("Exiting"); break;
+        case LVAL_OK:      break;
         case LVAL_FN: {
             if (v->builtin != NULL) {
                 printf("<builtin>");
@@ -182,10 +186,14 @@ void lval_print(Lval_t* v) {
             }
             break;
         }
+        default: assert(false && "you added a new type, but forgot to add it to copy!");
     }
 }
 
-void lval_println(Lval_t* v) { lval_print(v); printf("\n"); }
+void lval_println(Lval_t* v) {
+    if (v->type == LVAL_OK) return;
+    lval_print(v); printf("\n");
+}
 
 Lenv_t* lenv_new(void) {
     Lenv_t* e = malloc(sizeof(Lenv_t));
@@ -250,7 +258,9 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "\\",  builtin_lambda);
     lenv_add_builtin(e, "fn",  builtin_fn);
 
-    /* variables */
+    /* atoms */
+    lenv_add_builtin_const(e, "ok",    lval_create_ok());
+    lenv_add_builtin_const(e, "nil",   lval_create_qexpr());
     lenv_add_builtin_const(e, "true",  lval_create_bool(true));
     lenv_add_builtin_const(e, "false", lval_create_bool(false));
     lenv_add_builtin_const(e, "exit",  lval_create_exit());
@@ -317,7 +327,7 @@ Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
 
         lval_del(expr);
         lval_del(a);
-        return lval_create_sexpr();
+        return lval_create_ok();
     } else {
         char* err_msg = mpc_err_string(r.error);
         mpc_err_delete(r.error);
@@ -395,6 +405,12 @@ static Lval_t* lval_create_err(char* fmt, ...) {
 
     va_end(va);
 
+    return v;
+}
+
+static Lval_t* lval_create_ok(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_OK;
     return v;
 }
 
@@ -800,6 +816,8 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
         }
 
         case LVAL_EXIT: return 1;
+        case LVAL_OK: return 1;
+        default: assert(false && "you added a new type, but forgot to add it to copy!");
     }
     return 0;
 }
@@ -978,7 +996,7 @@ static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn) {
     }
 
     lval_del(a);
-    return lval_create_sexpr();
+    return lval_create_ok();
 }
 
 static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
@@ -1000,7 +1018,7 @@ static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
     Lval_t* body = lval_pop(a, 0);
     lenv_def(e, fn_name, lval_create_lambda(formals, body));
     lval_del(a);
-    return lval_create_sexpr();
+    return lval_create_ok();
 }
 
 static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a) {
@@ -1091,7 +1109,11 @@ static Lval_t* lval_copy(Lval_t* v) {
             }
             break;
         }
+
+        case LVAL_OK:
         case LVAL_EXIT: break;
+
+        default: assert(false && "you added a new type, but forgot to add it to copy!");
     }
     return x;
 }
@@ -1191,8 +1213,8 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_SEXPR:    return "S-Expression";
         case LVAL_QEXPR:    return "Q-Expression";
         case LVAL_EXIT:     return "Exit";
-        default: return "Your language is falling apart!";
-    }
+        case LVAL_OK:       return "OK";
+        default: assert(false && "you added a new type, but forgot to add it to copy!");    }
 }
 
 /*
@@ -1215,7 +1237,7 @@ static Lval_t* builtin_print(Lenv_t* e, Lval_t* a) {
     }
     putchar('\n');
     lval_del(a);
-    return lval_create_sexpr();
+    return lval_create_ok();
 }
 
 static Lval_t* builtin_error(Lenv_t* e, Lval_t* a) {
