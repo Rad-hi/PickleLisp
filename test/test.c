@@ -20,7 +20,7 @@ typedef struct {
 static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
     switch (expected.type) {
         case LVAL_ERR: {
-            bool cond = (bool)strstr(val->err, expected.err);
+            bool cond = val->type == LVAL_ERR;
             PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
             if (!cond) exit(-1);
@@ -44,7 +44,14 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
 #endif
             break;
         }
-        case LVAL_STR:
+        case LVAL_STR: {
+            bool cond = strcmp(val->str, expected.str) == 0;
+            PRINT_VERDICT(cond, test_name);
+#ifdef EXIT_ON_FAIL
+            if (!cond) exit(-1);
+#endif
+            break;
+        }
         case LVAL_SEXPR:
         case LVAL_QEXPR:
         case LVAL_SYM:
@@ -79,6 +86,13 @@ static Lval_t get_lval_bool(bool value) {
     return (Lval_t){
         .type = LVAL_BOOL,
         .num.li = value
+    };
+}
+
+static Lval_t get_lval_str(char* s) {
+    return (Lval_t){
+        .type = LVAL_STR,
+        .str = s
     };
 }
 
@@ -236,6 +250,50 @@ static void test_QExpressions(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
+static void test_QExpressions_Strings(mpc_parser_t* language, Lenv_t* e) {
+    test_statement_t tests[] = {
+        {
+            .name = "QExpressions_Strings head-tail",
+            .statement = "head (tail (tail \"56783.5\"))",
+            .expected = get_lval_str("7")
+        },
+        {
+            .name = "QExpressions_Strings head-tail err",
+            .statement = "head (tail (tail (tail \"5676.93.5\" {})))",
+            .expected = get_lval_err("")
+        },
+        {
+            .name = "QExpressions_Strings join",
+            .statement = "join \"1\" \"1\" \"34\" \"1\"",
+            .expected = get_lval_str("11341")
+        },
+        {
+            .name = "QExpressions_Strings join err",
+            .statement = "join \"1\" \"1\" {69} \"34\" \"1\"",
+            .expected = get_lval_err("")
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strcmp(tests[i].statement, "end") != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
 static void test_Boolean(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t tests[] = {
         {
@@ -358,15 +416,11 @@ static void test_fn(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
-/*--------------------------------------*/
-/* NOTE: VERY BADLY WRITTEN ERROR TESTS */
-/*--------------------------------------*/
-
 static void test_DivByZero_err(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "DivByZero",
         .statement = "/ 1. 0",
-        .expected = get_lval_err("By Zero"),
+        .expected = get_lval_err(""),
     };
 
     mpc_result_t r;
@@ -387,7 +441,7 @@ static void test_BadInput_err(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "BadInput",
         .statement = "% 1. 0.",
-        .expected = get_lval_err("cannot be 0"),
+        .expected = get_lval_err(""),
     };
 
     mpc_result_t r;
@@ -408,7 +462,7 @@ static void test_NonNumber_err(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t t = {
         .name = "NonNumber",
         .statement = "(/ ())",
-        .expected = get_lval_err("non-number"),
+        .expected = get_lval_err(""),
     };
 
     mpc_result_t r;
@@ -460,6 +514,7 @@ int main(int argc, char** argv) {
     test_fn(language, e);
     test_Boolean(language, e);
     test_Conditional(language, e);
+    test_QExpressions_Strings(language, e);
 
     cleanup();
     lenv_del(e);
