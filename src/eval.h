@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <assert.h>
 
+#include "config.h"
 #include "mpc.h"
 
 #define ERR_BUF_LEN     512

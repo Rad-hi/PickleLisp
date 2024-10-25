@@ -314,8 +314,15 @@ Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM("load", a, 1);
     LASSERT_TYPE("load", a, 0, LVAL_STR);
 
+    char* filename = a->cell[0]->str;
+    size_t base_name_len = strlen(filename) - strlen(EXTENSION);
+    char* end = filename + (base_name_len > 0 ? base_name_len : 0);
+    LASSERT(a, strcmp(end , EXTENSION) == 0,
+            "Function `load` expects a file with the extension [%s], got [%s]",
+            EXTENSION, filename);
+
     mpc_result_t r;
-    if (mpc_parse_contents(a->cell[0]->str, pickle_lisp, &r)) {
+    if (mpc_parse_contents(filename, pickle_lisp, &r)) {
         Lval_t* expr = lval_read(r.output);
         mpc_ast_delete(r.output);
 

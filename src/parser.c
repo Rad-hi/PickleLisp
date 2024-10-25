@@ -25,8 +25,6 @@
     #include <editline/history.h>
 #endif // _WIN32
 
-#define REPL_IN      "8=> "
-#define LANG_NAME    "PickleLisp"
 #define PRINT_AST    0
 
 int main(int argc, char** argv) {
