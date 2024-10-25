@@ -15,6 +15,9 @@
     || a->cell[idx]->type == LVAL_DECIMAL \
     || a->cell[idx]->type == LVAL_BOOL)
 
+#define IS_ITERABLE(a, idx) (a->cell[idx]->type == LVAL_QEXPR \
+                          || a->cell[idx]->type == LVAL_STR)
+
 #define LASSERT(arg, cond, fmt, ...)                        \
     if (!(cond)) {                                          \
         Lval_t* err = lval_create_err(fmt, ##__VA_ARGS__);  \

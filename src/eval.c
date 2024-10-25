@@ -878,15 +878,21 @@ static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a) {
 
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a) {
     for (int i = 0; i < a->count; ++i) {
-        LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
-        "Function `join` expects arguments of type [%s], "
-        "but arg [%i] is of type [%s]",
-        ltype_name(LVAL_QEXPR), i + 1, ltype_name(a->cell[0]->type));
+        LASSERT(a, IS_ITERABLE(a, i),
+        "Function `join` expects arguments of type [%s, %s], "
+        "but arg [%i] is of type [%s]", ltype_name(LVAL_QEXPR),
+        ltype_name(LVAL_STR), i + 1, ltype_name(a->cell[i]->type));
     }
 
     Lval_t* x = lval_pop(a, 0);
-    while (a->count) { x = lval_join(x, lval_pop(a, 0)); }
+    for (int i = 0; i < a->count; ++i) {
+        LASSERT(a, x->type == a->cell[i]->type,
+        "Function `join` expects all arguments to be of the same type, arg [%i] "
+        "is of type [%s] which is different than 1st element's type [%s]", i + 2,
+        ltype_name(a->cell[i]->type), ltype_name(x->type));
+    }
 
+    while (a->count) { x = lval_join(x, lval_pop(a, 0)); }
     lval_del(a);
     return x;
 }
@@ -974,8 +980,21 @@ static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
-    while (y->count) { x = lval_add(x, lval_pop(y, 0)); }
-
+    switch (x->type) {
+        case LVAL_QEXPR: {
+            while (y->count) { x = lval_add(x, lval_pop(y, 0)); }
+            break;
+        }
+        case LVAL_STR: {
+            const size_t l1 = strlen(x->str);
+            const size_t l2 = strlen(y->str);
+            x->str = realloc(x->str, l1 + l2 + 1);
+            strncpy(x->str + l1, y->str, l2 + 1);
+            break;
+        }
+        default:
+            assert(false && "lval_join doesn't support this type");
+    }
     lval_del(y);
     return x;
 }
@@ -1119,8 +1138,8 @@ static bool _lookup_builtin_name(char* name) {
 
 static char* ltype_name(LVAL_e t) {
     switch (t) {
-        case LVAL_INTEGER:
-        case LVAL_DECIMAL:  return "Number";
+        case LVAL_INTEGER:  return "Int";
+        case LVAL_DECIMAL:  return "Float";
         case LVAL_BOOL:     return "Boolean";
         case LVAL_ERR:      return "Error";
         case LVAL_STR:      return "String";
@@ -1128,7 +1147,7 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_FN:       return "Function";
         case LVAL_SEXPR:    return "S-Expression";
         case LVAL_QEXPR:    return "Q-Expression";
-        case LVAL_EXIT:   return "Exit";
+        case LVAL_EXIT:     return "Exit";
         default: return "Your language is falling apart!";
     }
 }
