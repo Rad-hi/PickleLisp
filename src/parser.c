@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "config.h"
 #include "grammar.h"
 #include "eval.h"
 #include "mpc.h"

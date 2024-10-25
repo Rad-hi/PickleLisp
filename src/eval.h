@@ -6,8 +6,6 @@
 #include "config.h"
 #include "mpc.h"
 
-#define ERR_BUF_LEN     512
-
 #define min(a, b)       ((a) > (b) ? (b) : (a))
 #define max(a, b)       ((a) > (b) ? (a) : (b))
 
