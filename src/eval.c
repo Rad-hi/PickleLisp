@@ -38,8 +38,8 @@ static Lval_t* builtin_or(Lenv_t* e, Lval_t* a);
 
 static Lval_t* builtin_error(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_print(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_read(Lenv_t* e, Lval_t* a);
 
-/* lenv manipulators */
 static void    lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val);
 static void    lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
 static void    lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v);
@@ -47,7 +47,6 @@ static void    lenv_def(Lenv_t* e, Lval_t* k, Lval_t* v);
 static Lval_t* lenv_get(Lenv_t* e, Lval_t* k);
 static Lenv_t* lenv_copy(Lenv_t* e);
 
-/* lval manipulators */
 static Lval_t* lval_join(Lval_t* x, Lval_t* y);
 static Lval_t* lval_take(Lval_t* v, int i);
 static Lval_t* lval_pop(Lval_t* v, int i);
@@ -55,7 +54,6 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* f, Lval_t* a);
 static Lval_t* lval_copy(Lval_t* v);
 static int     lval_eq(Lval_t* x, Lval_t* y);
 
-/* Parsers */
 static Lval_t* lval_read_double(mpc_ast_t* ast);
 static Lval_t* lval_read_long(mpc_ast_t* ast);
 static Lval_t* lval_read_str(mpc_ast_t* ast);
@@ -73,10 +71,10 @@ static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 
-/* Misc */
 static void  lval_expr_print(Lval_t* v, char open, char close);
 static char* ltype_name(LVAL_e t);
-static void lval_print_str(Lval_t* v);
+static void  lval_print_str(Lval_t* v);
+static char* fread_line(FILE* fp, size_t size);
 
 /*
     Keep a record of all builtin names that exist in the language,
@@ -106,17 +104,17 @@ Lval_t* lval_read(mpc_ast_t* ast) {
     if (strstr(ast->tag, "symbol"))  return lval_create_sym(ast->contents);
 
     Lval_t* x = NULL;
-    if (strcmp(ast->tag, ">") == 0) x = lval_create_sexpr();
+    if (strncmp(ast->tag, ">", 1) == 0) x = lval_create_sexpr();
     if (strstr(ast->tag, "sexpr")) x = lval_create_sexpr();
     if (strstr(ast->tag, "qexpr")) x = lval_create_qexpr();
 
     for (int i = 0; i < ast->children_num; ++i) {
-        if (strstr(ast->children[i]->tag,     "comment")) continue;
-        if (strcmp(ast->children[i]->contents, "(") == 0) continue;
-        if (strcmp(ast->children[i]->contents, ")") == 0) continue;
-        if (strcmp(ast->children[i]->contents, "{") == 0) continue;
-        if (strcmp(ast->children[i]->contents, "}") == 0) continue;
-        if (strcmp(ast->children[i]->tag,  "regex") == 0) continue;
+        if (strstr(ast->children[i]->tag, "comment"))         continue;
+        if (strncmp(ast->children[i]->contents, "(", 1) == 0) continue;
+        if (strncmp(ast->children[i]->contents, ")", 1) == 0) continue;
+        if (strncmp(ast->children[i]->contents, "{", 1) == 0) continue;
+        if (strncmp(ast->children[i]->contents, "}", 1) == 0) continue;
+        if (strncmp(ast->children[i]->tag,  "regex", 5) == 0) continue;
         x = lval_add(x, lval_read(ast->children[i]));
     }
 
@@ -157,7 +155,7 @@ void lval_del(Lval_t* v) {
             free(v->cell);
             break;
         }
-        default: assert(false && "you added a new type, but forgot to add it to copy!");
+        default: assert(false && "you added a new type, but forgot to add it to del!");
     }
     free(v);
 }
@@ -246,6 +244,7 @@ void lenv_add_builtins(Lenv_t* e) {
 
     lenv_add_builtin(e, "load",  builtin_load);
     lenv_add_builtin(e, "print", builtin_print);
+    lenv_add_builtin(e, "read",  builtin_read);
     lenv_add_builtin(e, "error", builtin_error);
 
     lenv_add_builtin(e, "def", builtin_def);
@@ -306,15 +305,15 @@ Lval_t* lval_add(Lval_t* v, Lval_t* x) {
 
 
 Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("load", a, 1);
-    LASSERT_TYPE("load", a, 0, LVAL_STR);
+    LASSERT_NUM(__func__, a, 1);
+    LASSERT_TYPE(__func__, a, 0, LVAL_STR);
 
     char* filename = a->cell[0]->str;
     size_t base_name_len = strlen(filename) - strlen(EXTENSION);
     char* end = filename + (base_name_len > 0 ? base_name_len : 0);
     LASSERT(a, strcmp(end , EXTENSION) == 0,
-            "Function `load` expects a file with the extension [%s], got [%s]",
-            EXTENSION, filename);
+            "Function `%s` expects a file with the extension [%s], got [%s]",
+            __func__, EXTENSION, filename);
 
     mpc_result_t r;
     if (mpc_parse_contents(filename, pickle_lisp, &r)) {
@@ -334,7 +333,7 @@ Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
         char* err_msg = mpc_err_string(r.error);
         mpc_err_delete(r.error);
 
-        Lval_t* err = lval_create_err("Could not load library. %s", err_msg);
+        Lval_t* err = lval_create_err("Could not load library [%s]", err_msg);
         free(err_msg);
         lval_del(a);
 
@@ -493,6 +492,7 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
         if (fn->formals->count == 0) {
             lval_del(a);
             return lval_create_err(
+                // TODO: figure out how to provide the name of the function
                 "Function `user-defined` expects [%i] args, got [%i].", total, given);
         }
 
@@ -666,10 +666,10 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
 }
 
 static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
-    LASSERT(a, a->count >= 2, "Function `min` expects at least 2 arguments, got [%i]", a->count);
+    LASSERT(a, a->count >= 2, "Function `%s` expects at least 2 arguments, got [%i]", __func__, a->count);
     for (int i = 0; i < a->count; ++i) {
-        LASSERT(a, IS_NUM(a, i), "Function `min` expects arguments of type Number,"
-                                 " but arg [%i] is of type [%s]",
+        LASSERT(a, IS_NUM(a, i), "Function `%s` expects arguments of type Number,"
+                                 " but arg [%i] is of type [%s]", __func__,
                                  i + 1, ltype_name(a->cell[i]->type));
     }
 
@@ -696,10 +696,10 @@ static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
-    LASSERT(a, a->count >= 2, "Function `max` expects at least 2 arguments, got [%i]", a->count);
+    LASSERT(a, a->count >= 2, "Function `%s` expects at least 2 arguments, got [%i]", __func__, a->count);
     for (int i = 0; i < a->count; ++i) {
-        LASSERT(a, IS_NUM(a, i), "Function `max` expects arguments of type Number,"
-                                 " but arg [%i] is of type [%s]",
+        LASSERT(a, IS_NUM(a, i), "Function `%s` expects arguments of type Number,"
+                                 " but arg [%i] is of type [%s]", __func__,
                                  i + 1, ltype_name(a->cell[i]->type));
     }
 
@@ -752,19 +752,19 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
             x->type = LVAL_DECIMAL;
             x->num.f = (double)x->num.li;
         }
-        if (strcmp(op, ">") == 0) res->num.li = x->num.f > y->num.f;
-        if (strcmp(op, "<") == 0) res->num.li = x->num.f < y->num.f;
-        if (strcmp(op, ">=") == 0) res->num.li = x->num.f >= y->num.f;
-        if (strcmp(op, "<=") == 0) res->num.li = x->num.f <= y->num.f;
-        if (strcmp(op, "&&") == 0) res->num.li = x->num.f && y->num.f;
-        if (strcmp(op, "||") == 0) res->num.li = x->num.f || y->num.f;
+        if (strncmp(op, ">", 1) == 0) res->num.li = x->num.f > y->num.f;
+        if (strncmp(op, "<", 1) == 0) res->num.li = x->num.f < y->num.f;
+        if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.f >= y->num.f;
+        if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.f <= y->num.f;
+        if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.f && y->num.f;
+        if (strncmp(op, "||", 2) == 0) res->num.li = x->num.f || y->num.f;
     } else {
-        if (strcmp(op, ">") == 0) res->num.li = x->num.li > y->num.li;
-        if (strcmp(op, "<") == 0) res->num.li = x->num.li < y->num.li;
-        if (strcmp(op, ">=") == 0) res->num.li = x->num.li >= y->num.li;
-        if (strcmp(op, "<=") == 0) res->num.li = x->num.li <= y->num.li;
-        if (strcmp(op, "&&") == 0) res->num.li = x->num.li && y->num.li;
-        if (strcmp(op, "||") == 0) res->num.li = x->num.li || y->num.li;
+        if (strncmp(op, ">", 1) == 0) res->num.li = x->num.li > y->num.li;
+        if (strncmp(op, "<", 1) == 0) res->num.li = x->num.li < y->num.li;
+        if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.li >= y->num.li;
+        if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.li <= y->num.li;
+        if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.li && y->num.li;
+        if (strncmp(op, "||", 2) == 0) res->num.li = x->num.li || y->num.li;
     }
 
     lval_del(a);
@@ -772,7 +772,7 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
 }
 
 static Lval_t* builtin_not(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("!", a, 1);
+    LASSERT_NUM(__func__, a, 1);
     if (a->cell[0]->type == LVAL_DECIMAL) {
         a->cell[0]->type = LVAL_BOOL;
         a->cell[0]->num.li = (long)a->cell[0]->num.f;
@@ -780,7 +780,7 @@ static Lval_t* builtin_not(Lenv_t* e, Lval_t* a) {
         a->cell[0]->type = LVAL_BOOL;
         a->cell[0]->num.li = (long)a->cell[0]->num.li;
     }
-    LASSERT_TYPE("!", a, 0, LVAL_BOOL);
+    LASSERT_TYPE(__func__, a, 0, LVAL_BOOL);
 
     bool res = !(bool)(a->cell[0]->num.li);
     lval_del(a);
@@ -831,15 +831,15 @@ static Lval_t* builtin_cmp(Lenv_t* e, Lval_t* a, char* op) {
     LASSERT_NUM(op, a, 2);
 
     bool res;
-    if (strcmp(op, "==") == 0) res = lval_eq(a->cell[0], a->cell[1]);
-    if (strcmp(op, "!=") == 0) res = !lval_eq(a->cell[0], a->cell[1]);
+    if (strncmp(op, "==", 2) == 0) res = lval_eq(a->cell[0], a->cell[1]);
+    if (strncmp(op, "!=", 2) == 0) res = !lval_eq(a->cell[0], a->cell[1]);
 
     lval_del(a);
     return lval_create_bool(res);
 }
 
 static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("if", a, 3);
+    LASSERT_NUM(__func__, a, 3);
 
     if (a->cell[0]->type == LVAL_DECIMAL) {
         a->cell[0]->type = LVAL_BOOL;
@@ -847,9 +847,9 @@ static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
     }
     if (a->cell[0]->type == LVAL_INTEGER) a->cell[0]->type = LVAL_BOOL;
  
-    LASSERT_TYPE("if", a, 0, LVAL_BOOL);
-    LASSERT_TYPE("if", a, 1, LVAL_QEXPR);
-    LASSERT_TYPE("if", a, 2, LVAL_QEXPR);
+    LASSERT_TYPE(__func__, a, 0, LVAL_BOOL);
+    LASSERT_TYPE(__func__, a, 1, LVAL_QEXPR);
+    LASSERT_TYPE(__func__, a, 2, LVAL_QEXPR);
 
     a->cell[1]->type = LVAL_SEXPR;
     a->cell[2]->type = LVAL_SEXPR;
@@ -861,17 +861,17 @@ static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("head", a, 1);
+    LASSERT_NUM(__func__, a, 1);
 
     Lval_t* v = a->cell[0];
     LASSERT(a, IS_ITERABLE(a, 0),
-            "Function `head` expects arguments of type [%s, %s], "
-            "but arg [1] is of type [%s]", ltype_name(LVAL_QEXPR),
+            "Function `%s` expects arguments of type [%s, %s], "
+            "but arg [1] is of type [%s]", __func__, ltype_name(LVAL_QEXPR),
             ltype_name(LVAL_STR), ltype_name(v->type));
     bool cond = (v->type == LVAL_QEXPR && v->count != 0)
              || (v->type == LVAL_STR && strlen(v->str) > 0);
-    LASSERT(a, cond, "Function `head` expects a non-empty [%s, %s]!",
-                     ltype_name(LVAL_QEXPR), ltype_name(LVAL_STR));
+    LASSERT(a, cond, "Function `%s` expects a non-empty [%s, %s]!",
+                     __func__, ltype_name(LVAL_QEXPR), ltype_name(LVAL_STR));
 
     v = lval_take(a, 0);  // upacks the input Q-expression
     switch (v->type) {
@@ -894,17 +894,17 @@ static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("tail", a, 1);
+    LASSERT_NUM(__func__, a, 1);
 
     Lval_t* v = a->cell[0];
     LASSERT(a, IS_ITERABLE(a, 0),
-            "Function `tail` expects arguments of type [%s, %s], "
-            "but arg [1] is of type [%s]", ltype_name(LVAL_QEXPR),
+            "Function `%s` expects arguments of type [%s, %s], "
+            "but arg [1] is of type [%s]", __func__, ltype_name(LVAL_QEXPR),
             ltype_name(LVAL_STR), ltype_name(v->type));
     bool cond = (v->type == LVAL_QEXPR && v->count != 0)
              || (v->type == LVAL_STR && strlen(v->str) > 0);
-    LASSERT(a, cond, "Function `tail` expects a non-empty [%s, %s]!",
-                     ltype_name(LVAL_QEXPR), ltype_name(LVAL_STR));
+    LASSERT(a, cond, "Function `%s` expects a non-empty [%s, %s]!",
+                    __func__, ltype_name(LVAL_QEXPR), ltype_name(LVAL_STR));
 
     v = lval_take(a, 0);  // upacks the input Q-expression
     switch (v->type) {
@@ -931,8 +931,8 @@ static Lval_t* builtin_list(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("eval", a, 1);
-    LASSERT_TYPE("eval", a, 0, LVAL_QEXPR);
+    LASSERT_NUM(__func__, a, 1);
+    LASSERT_TYPE(__func__, a, 0, LVAL_QEXPR);
 
     Lval_t* x = lval_take(a, 0);
     x->type = LVAL_SEXPR;
@@ -942,17 +942,17 @@ static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a) {
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a) {
     for (int i = 0; i < a->count; ++i) {
         LASSERT(a, IS_ITERABLE(a, i),
-        "Function `join` expects arguments of type [%s, %s], "
-        "but arg [%i] is of type [%s]", ltype_name(LVAL_QEXPR),
+        "Function `%s` expects arguments of type [%s, %s], "
+        "but arg [%i] is of type [%s]", __func__, ltype_name(LVAL_QEXPR),
         ltype_name(LVAL_STR), i + 1, ltype_name(a->cell[i]->type));
     }
 
     Lval_t* x = lval_pop(a, 0);
     for (int i = 0; i < a->count; ++i) {
         LASSERT(a, x->type == a->cell[i]->type,
-        "Function `join` expects all arguments to be of the same type, arg [%i] "
-        "is of type [%s] which is different than 1st element's type [%s]", i + 2,
-        ltype_name(a->cell[i]->type), ltype_name(x->type));
+        "Function `%s` expects all arguments to be of the same type, arg [%i] "
+        "is of type [%s] which is different than 1st element's type [%s]", __func__,
+        i + 2, ltype_name(a->cell[i]->type), ltype_name(x->type));
     }
 
     while (a->count) { x = lval_join(x, lval_pop(a, 0)); }
@@ -993,8 +993,8 @@ static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn) {
     }
 
     for (int i = 0; i < symbols->count; ++i) {
-        if (strcmp(fn, "def") == 0) lenv_def(e, symbols->cell[i], a->cell[i + 1]);
-        if (strcmp(fn, "=") == 0)   lenv_put(e, symbols->cell[i], a->cell[i + 1]);
+        if (strncmp(fn, "def", 3) == 0) lenv_def(e, symbols->cell[i], a->cell[i + 1]);
+        if (strncmp(fn, "=", 1) == 0)   lenv_put(e, symbols->cell[i], a->cell[i + 1]);
     }
 
     lval_del(a);
@@ -1002,17 +1002,17 @@ static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn) {
 }
 
 static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("fn", a, 2);
-    LASSERT_TYPE("fn", a, 0, LVAL_QEXPR);
-    LASSERT_TYPE("fn", a, 1, LVAL_QEXPR);
+    LASSERT_NUM(__func__, a, 2);
+    LASSERT_TYPE(__func__, a, 0, LVAL_QEXPR);
+    LASSERT_TYPE(__func__, a, 1, LVAL_QEXPR);
 
     Lval_t* symbols = a->cell[0];
 
     /* First Q-expr must only contain symbols */
     for (int i = 0; i < symbols->count; ++i) {
         LASSERT(a, (symbols->cell[i]->type == LVAL_SYM),
-            "Function `fn` cannot define arg [%i] of type [%s], expected [%s]",
-            i, ltype_name(symbols->cell[i]->type), ltype_name(LVAL_SYM));
+            "Function `%s` cannot define arg [%i] of type [%s], expected [%s]",
+            __func__, i, ltype_name(symbols->cell[i]->type), ltype_name(LVAL_SYM));
     }
 
     Lval_t* fn_name = lval_pop(symbols, 0);
@@ -1024,15 +1024,15 @@ static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("\\", a, 2);
-    LASSERT_TYPE("\\", a, 0, LVAL_QEXPR);
-    LASSERT_TYPE("\\", a, 1, LVAL_QEXPR);
+    LASSERT_NUM(__func__, a, 2);
+    LASSERT_TYPE(__func__, a, 0, LVAL_QEXPR);
+    LASSERT_TYPE(__func__, a, 1, LVAL_QEXPR);
 
     /* First Q-expr must only contain symbols */
     for (int i = 0; i < a->cell[0]->count; ++i) {
         LASSERT(a, (a->cell[0]->cell[i]->type == LVAL_SYM),
-            "Function `\\` cannot define arg [%i] of type [%s]. Expected type [%s]",
-            i + 1, ltype_name(a->cell[0]->cell[i]->type), ltype_name(LVAL_SYM));
+            "Function `%s` cannot define arg [%i] of type [%s]. Expected type [%s]",
+            __func__, i + 1, ltype_name(a->cell[0]->cell[i]->type), ltype_name(LVAL_SYM));
     }
 
     Lval_t* formals = lval_pop(a, 0);
@@ -1216,7 +1216,8 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_QEXPR:    return "Q-Expression";
         case LVAL_EXIT:     return "Exit";
         case LVAL_OK:       return "OK";
-        default: assert(false && "you added a new type, but forgot to add it to copy!");    }
+        // TODO: use the __function__ and __number__?? to print better errors
+        default: assert(false && "you added a new type, but forgot to add it to ltype_name!");    }
 }
 
 /*
@@ -1232,6 +1233,49 @@ static void lval_print_str(Lval_t* v) {
     free(escaped);
 }
 
+static char* fread_line(FILE* fp, size_t size) {
+    char* str;
+    int ch;
+    size_t len = 0;
+
+    str = realloc(NULL, sizeof(*str) * size);
+    if(!str) return str;
+
+    while(EOF != (ch = fgetc(fp)) && ch != '\n') {
+        str[len++] = ch;
+        if(len == size){
+            str = realloc(str, sizeof(*str) * (size *= 2));
+            if(!str) return str;
+        }
+    }
+    str[len++] = '\0';
+
+    return realloc(str, sizeof(*str) * len);
+}
+
+static Lval_t* builtin_read(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM(__func__, a, 1);
+    LASSERT_TYPE(__func__, a, 0, LVAL_QEXPR);
+
+    Lval_t* v = a->cell[0];
+    LASSERT_NUM(__func__, v, 1);
+    LASSERT(a, (v->cell[0]->type == LVAL_SYM),
+            "Function `%s` cannot define arg [%i] of type [%s], expected [%s]",
+            __func__, 1, ltype_name(v->cell[0]->type), ltype_name(LVAL_SYM));
+
+    Lval_t* sym = lval_pop(v, 0);
+    lval_del(a);
+
+    char* s = fread_line(stdin, READ_BUF_LEN);
+    if (s) {
+        lenv_def(e, sym, lval_create_str(s));
+        free(s);
+        return lval_create_ok();
+    } else {
+        return lval_create_err("Function `%s` coudn't read input string", __func__);
+    }
+}
+
 static Lval_t* builtin_print(Lenv_t* e, Lval_t* a) {
     for (int i = 0; i < a->count; ++i) {
         lval_print(a->cell[i]);
@@ -1243,8 +1287,8 @@ static Lval_t* builtin_print(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_error(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM("error", a, 1);
-    LASSERT_TYPE("error", a, 0, LVAL_STR);
+    LASSERT_NUM(__func__, a, 1);
+    LASSERT_TYPE(__func__, a, 0, LVAL_STR);
     Lval_t* err = lval_create_err(a->cell[0]->str);
     lval_del(a);
     return err;
