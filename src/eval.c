@@ -39,6 +39,7 @@ static Lval_t* builtin_or(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_error(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_print(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_read(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_type(Lenv_t* e, Lval_t* a);
 
 static void    lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val);
 static void    lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
@@ -74,7 +75,7 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 static void  lval_expr_print(Lval_t* v, char open, char close);
 static char* ltype_name(LVAL_e t);
 static void  lval_print_str(Lval_t* v);
-static char* fread_line(FILE* fp, size_t size);
+static char* freadline(FILE* fp, size_t size);
 
 /*
     Keep a record of all builtin names that exist in the language,
@@ -246,6 +247,7 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "print", builtin_print);
     lenv_add_builtin(e, "read",  builtin_read);
     lenv_add_builtin(e, "error", builtin_error);
+    lenv_add_builtin(e, "type",  builtin_type);
 
     lenv_add_builtin(e, "def", builtin_def);
     lenv_add_builtin(e, "=",   builtin_put);
@@ -1233,7 +1235,7 @@ static void lval_print_str(Lval_t* v) {
     free(escaped);
 }
 
-static char* fread_line(FILE* fp, size_t size) {
+static char* freadline(FILE* fp, size_t size) {
     char* str;
     int ch;
     size_t len = 0;
@@ -1266,9 +1268,14 @@ static Lval_t* builtin_read(Lenv_t* e, Lval_t* a) {
     Lval_t* sym = lval_pop(v, 0);
     lval_del(a);
 
-    char* s = fread_line(stdin, READ_BUF_LEN);
+    if (_lookup_builtin_name(sym->sym)) {
+        LASSERT(sym, false, "Function `%s` cannot define arg named '%s'; "
+                            "builtin keyword!", __func__, sym->sym);
+    }
+
+    char* s = freadline(stdin, READ_BUF_LEN);
     if (s) {
-        lenv_def(e, sym, lval_create_str(s));
+        lenv_put(e, sym, lval_create_str(s));
         free(s);
         return lval_create_ok();
     } else {
@@ -1292,4 +1299,39 @@ static Lval_t* builtin_error(Lenv_t* e, Lval_t* a) {
     Lval_t* err = lval_create_err(a->cell[0]->str);
     lval_del(a);
     return err;
+}
+
+static Lval_t* builtin_type(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM(__func__, a, 1);
+    LASSERT_TYPE(__func__, a, 0, LVAL_QEXPR);
+
+    Lval_t* v = a->cell[0];
+    LASSERT_NUM(__func__, v, 1);
+
+    Lval_t* val = lval_pop(v, 0);
+    lval_del(a);
+
+    switch (val->type) {
+        case LVAL_INTEGER:
+        case LVAL_DECIMAL:
+        case LVAL_STR:
+        case LVAL_ERR:
+        case LVAL_EXIT:
+        case LVAL_OK:
+        case LVAL_BOOL:
+        case LVAL_SEXPR:
+        case LVAL_QEXPR:
+            return lval_create_str(ltype_name(val->type));
+
+        case LVAL_SYM:
+        case LVAL_FN: {
+            for (int i = 0; i < e->count; ++i) {
+                if (strcmp(e->syms[i], val->sym) == 0) {
+                    return lval_create_str(ltype_name(e->vals[i]->type));
+                }
+            }
+        }
+    }
+
+    LASSERT(val, false, "Function `%s` cannot find arg [%s]", __func__, val->sym);
 }

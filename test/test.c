@@ -14,6 +14,7 @@ typedef struct {
     char* name;
     char* statement;
     Lval_t expected;
+    char* fn;
 } test_statement_t;
 
 
@@ -334,6 +335,89 @@ static void test_Boolean(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
+static void test_Builtin_Symbol_Redefinition_Error(mpc_parser_t* language, Lenv_t* e) {
+    test_statement_t tests[] = {
+        {
+            .name = "Builtin_Symbol_Redefinition_Error `tail`",
+            .statement = "def {tail} 69",
+            .expected = get_lval_err("")
+        },
+        {
+            .name = "Builtin_Symbol_Redefinition_Error `nil`",
+            .statement = "def {nil} {}",
+            .expected = get_lval_err("")
+        },
+        {
+            .name = "Builtin_Symbol_Redefinition_Error `fn`",
+            .statement = "def {fn} true",
+            .expected = get_lval_err("")
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strcmp(tests[i].statement, "end") != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
+static void test_Type_Inference(mpc_parser_t* language, Lenv_t* e) {
+    test_statement_t tests[] = {
+        {
+            .name = "Type_Inference `tail`",
+            .statement = "type {tail}",
+            .expected = get_lval_str("Function")
+        },
+        {
+            .name = "Type_Inference `nil`",
+            .statement = "type {nil}",
+            .expected = get_lval_str("Q-Expression")
+        },
+        {
+            .name = "Type_Inference `Float`",
+            .statement = "type {3.}",
+            .expected = get_lval_str("Float")
+        },
+        {
+            .name = "Type_Inference `Int`",
+            .statement = "type {69}",
+            .expected = get_lval_str("Int")
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strcmp(tests[i].statement, "end") != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
 static void test_Conditional(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t tests[] = {
         {
@@ -379,41 +463,55 @@ static void test_fn(mpc_parser_t* language, Lenv_t* e) {
         STEP ZERO: Define the unit test for the `sum` function
     */
     
-    test_statement_t t = {
-        .name = "fn sum",
-        .statement = "sum 1 2 3",
-        .expected = get_lval_long(6),
+    test_statement_t tests[] = {
+        {
+            .name = "fn sum",
+            .statement = "sum 1 2 3",
+            .expected = get_lval_long(6),
+            .fn = "fn {sum & es} {eval (join (list +) es)}"
+        },
+        {
+            .name = "fn unpack",
+            .statement = "unpack * {2 2}",
+            .expected = get_lval_long(4),
+            .fn = "fn {unpack f l} { eval (join (list f) l) }"
+        },
+
+        // keep this at the end
+        {.statement = "end"},
     };
 
     mpc_result_t r;
-
-    /*
-        STEP ONE: Register the `sum` function
-    */
-    if (mpc_parse("test", "fn {sum & es} {eval (join (list +) es)}", language, &r)) {
-        lval_eval(e, lval_read(r.output));
-        mpc_ast_delete(r.output);
-    } else {
-        printf("[FAILED] Parsing error\n");
-        PRINT_VERDICT(false, t.name);
+    int i = 0;
+    while (strcmp(tests[i].statement, "end") != 0) {
+        /*
+            STEP ONE: Register the `sum` function
+        */
+        if (mpc_parse("test", tests[i].fn, language, &r)) {
+            lval_eval(e, lval_read(r.output));
+            mpc_ast_delete(r.output);
+        } else {
+            printf("[FAILED] Parsing error\n");
+            PRINT_VERDICT(false, tests[i].name);
 #ifdef EXIT_ON_FAIL
-        exit(1);
+            exit(1);
 #endif
-    }
+        }
 
-    /*
-        STEP TWO: call the `sum` function and test it
-    */
-    if (mpc_parse("test", t.statement, language, &r)) {
-        Lval_t* res = lval_eval(e, lval_read(r.output));
-        assert_equal(res, t.expected, t.name);
-        mpc_ast_delete(r.output);
-    } else {
-        printf("[FAILED] Parsing error\n");
-        PRINT_VERDICT(false, t.name);
+        /*
+            STEP TWO: call the `sum` function and test it
+        */
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
 #ifdef EXIT_ON_FAIL
-        exit(1);
+            exit(1);
 #endif
+        }
+        i++;
     }
 }
 
@@ -516,6 +614,8 @@ int main(int argc, char** argv) {
     test_Boolean(language, e);
     test_Conditional(language, e);
     test_QExpressions_Strings(language, e);
+    test_Builtin_Symbol_Redefinition_Error(language, e);
+    test_Type_Inference(language, e);
 
     cleanup();
     lenv_del(e);
