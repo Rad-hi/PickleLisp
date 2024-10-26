@@ -218,14 +218,12 @@ void lenv_del(Lenv_t* e) {
     Register all builtins in the environment
 */
 void lenv_add_builtins(Lenv_t* e) {
-    /* list functions */
     lenv_add_builtin(e, "list", builtin_list);
     lenv_add_builtin(e, "head", builtin_head);
     lenv_add_builtin(e, "tail", builtin_tail);
     lenv_add_builtin(e, "eval", builtin_eval);
     lenv_add_builtin(e, "join", builtin_join);
 
-    /* mathematical functions */
     lenv_add_builtin(e, "min", builtin_min);
     lenv_add_builtin(e, "max", builtin_max);
     lenv_add_builtin(e, "+",   builtin_add);
@@ -235,7 +233,6 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "%",   builtin_mod);
     lenv_add_builtin(e, "^",   builtin_pow);
 
-    /* comparisons */
     lenv_add_builtin(e, "if", builtin_if);
     lenv_add_builtin(e, "==", builtin_eq);
     lenv_add_builtin(e, "!=", builtin_ne);
@@ -247,12 +244,10 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "&&", builtin_and);
     lenv_add_builtin(e, "||", builtin_or);
 
-    /* user interaction */
     lenv_add_builtin(e, "load",  builtin_load);
     lenv_add_builtin(e, "print", builtin_print);
     lenv_add_builtin(e, "error", builtin_error);
 
-    /* functions */
     lenv_add_builtin(e, "def", builtin_def);
     lenv_add_builtin(e, "=",   builtin_put);
     lenv_add_builtin(e, "\\",  builtin_lambda);

@@ -26,7 +26,7 @@ mpc_parser_t* create_lang() {
 
     mpca_lang(MPCA_LANG_DEFAULT,
         "integer : /-?[0-9]+/ ;"
-        "decimal : /-?[0-9]*['.'][0-9]*[fF]?/ ;"
+        "decimal : /-?[0-9]*[.][0-9]*[fF]?/ ;"
         "number  : <decimal> | <integer> ;"
         "string  : /\"(\\\\.|[^\"])*\"/ ;"
         "comment : /;[^\\r\\n]*/ ;"
