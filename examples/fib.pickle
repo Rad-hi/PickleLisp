@@ -1,0 +1,11 @@
+; example implementation of the `Fibonacci sequence`
+; Ref: https://en.wikipedia.org/wiki/Fibonacci_sequence
+
+(fn {fib n} {
+    select
+        { (== n 0) 0 }
+        { (== n 1) 1 }
+        { otherwise (+ (fib (- n 1)) (fib (- n 2))) }
+})
+
+(let {do (= {x} (fib 8)) (print x)})
