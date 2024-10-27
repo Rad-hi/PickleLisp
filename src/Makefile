@@ -12,7 +12,7 @@ CFLAGS = -Wall -g
 LFLAGS = -ledit -lm
 
 INCLUDES = -I../mpc
-SRCS = parser.c ../mpc/mpc.c eval.c grammar.c
+SRCS = pickle_lisp.c ../mpc/mpc.c eval.c grammar.c
 
 # define the C object files 
 #
