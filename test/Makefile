@@ -12,7 +12,7 @@ CFLAGS = -Wall -g -DEXIT_ON_FAIL
 LFLAGS = -ledit -lm
 
 INCLUDES = -I../mpc -I../src
-SRCS = test.c ../mpc/mpc.c ../src/eval.c ../src/grammar.c
+SRCS = test.c ../mpc/mpc.c ../src/core.c ../src/lang.c
 
 # define the C object files 
 #

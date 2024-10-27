@@ -105,4 +105,5 @@ void    lval_print(Lval_t* v);
 void    lval_println(Lval_t* v);
 void    lenv_del(Lenv_t* e);
 void    lenv_add_builtins(Lenv_t* e);
+void    _register_builtin_names_from_env(Lenv_t* e);
 void    _del_builtin_names(void);

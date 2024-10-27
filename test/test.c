@@ -3,8 +3,8 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "../src/grammar.h"
-#include "../src/eval.h"
+#include "../src/lang.h"
+#include "../src/core.h"
 
 #define EUPSILON                    0.000001
 #define ALMOST_EQ(a, b)             fabs((a) - (b)) <= (EUPSILON)
@@ -599,9 +599,9 @@ static void test_syntax_err(mpc_parser_t* language, Lenv_t* e) {
 
 int main(int argc, char** argv) {
 
-    Lenv_t* e = lenv_new();
-    lenv_add_builtins(e);
-    mpc_parser_t* language = create_lang();
+    mpc_parser_t* language = NULL;
+    Lenv_t* e = NULL;
+    create_vm(&e, &language);
 
     test_integer_addition(language, e);
     test_decimal_addition(language, e);

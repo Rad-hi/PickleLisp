@@ -3,11 +3,10 @@
 #include <stdbool.h>
 #include <string.h>
 #include <math.h>
-#include <unistd.h>
 
 #include "config.h"
-#include "grammar.h"
-#include "eval.h"
+#include "lang.h"
+#include "core.h"
 #include "mpc.h"
 
 #ifdef _WIN32
@@ -31,23 +30,9 @@
 #define PRINT_AST    0
 
 int main(int argc, char** argv) {
-
-    mpc_parser_t* language = create_lang();
-    Lenv_t* e = lenv_new();
-    lenv_add_builtins(e);
-
-    Lval_t* arg = lval_add(lval_create_sexpr(), lval_create_str(STD_LIB_PATH));
-    Lval_t* res = builtin_load(e, arg);
-    if (res->type == LVAL_ERR) {
-        lval_println(res);
-        char cwd[PATH_MAX];
-        if (getcwd(cwd, sizeof(cwd)) == NULL) {
-            strncpy(&cwd[0], "---", 4);
-        }
-        fprintf(stderr, "Cannot load the standard library, did you change its location ?"
-                        "Expected location: %s/%s\n", cwd, STD_LIB_PATH);
-        exit(69);
-    }
+    mpc_parser_t* language = NULL;
+    Lenv_t* e = NULL;
+    create_vm(&e, &language);
 
     if (argc >= 2) {
         for (int i = 1; i < argc; ++i) {

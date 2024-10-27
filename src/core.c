@@ -1,4 +1,4 @@
-#include "eval.h"
+#include "core.h"
 
 static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op);
 static Lval_t* builtin_add(Lenv_t* e, Lval_t* a);
@@ -72,10 +72,10 @@ static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 
-static void  lval_expr_print(Lval_t* v, char open, char close);
-static char* ltype_name(LVAL_e t);
-static void  lval_print_str(Lval_t* v);
-static char* freadline(FILE* fp, size_t size);
+static void    lval_expr_print(Lval_t* v, char open, char close);
+static char*   ltype_name(LVAL_e t);
+static void    lval_print_str(Lval_t* v);
+static char*   freadline(FILE* fp, size_t size);
 
 /*
     Keep a record of all builtin names that exist in the language,
@@ -156,7 +156,9 @@ void lval_del(Lval_t* v) {
             free(v->cell);
             break;
         }
-        default: assert(false && "you added a new type, but forgot to add it to del!");
+        default: 
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            assert(false);
     }
     free(v);
 }
@@ -185,7 +187,9 @@ void lval_print(Lval_t* v) {
             }
             break;
         }
-        default: assert(false && "you added a new type, but forgot to add it to copy!");
+        default:
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            assert(false);
     }
 }
 
@@ -217,42 +221,38 @@ void lenv_del(Lenv_t* e) {
     Register all builtins in the environment
 */
 void lenv_add_builtins(Lenv_t* e) {
-    lenv_add_builtin(e, "list", builtin_list);
-    lenv_add_builtin(e, "head", builtin_head);
-    lenv_add_builtin(e, "tail", builtin_tail);
-    lenv_add_builtin(e, "eval", builtin_eval);
-    lenv_add_builtin(e, "join", builtin_join);
-
-    lenv_add_builtin(e, "min", builtin_min);
-    lenv_add_builtin(e, "max", builtin_max);
-    lenv_add_builtin(e, "+",   builtin_add);
-    lenv_add_builtin(e, "-",   builtin_sub);
-    lenv_add_builtin(e, "*",   builtin_mul);
-    lenv_add_builtin(e, "/",   builtin_div);
-    lenv_add_builtin(e, "%",   builtin_mod);
-    lenv_add_builtin(e, "^",   builtin_pow);
-
-    lenv_add_builtin(e, "if", builtin_if);
-    lenv_add_builtin(e, "==", builtin_eq);
-    lenv_add_builtin(e, "!=", builtin_ne);
-    lenv_add_builtin(e, ">",  builtin_gt);
-    lenv_add_builtin(e, "<",  builtin_lt);
-    lenv_add_builtin(e, ">=", builtin_ge);
-    lenv_add_builtin(e, "<=", builtin_le);
-    lenv_add_builtin(e, "!",  builtin_not);
-    lenv_add_builtin(e, "&&", builtin_and);
-    lenv_add_builtin(e, "||", builtin_or);
-
+    lenv_add_builtin(e, "list",  builtin_list);
+    lenv_add_builtin(e, "head",  builtin_head);
+    lenv_add_builtin(e, "tail",  builtin_tail);
+    lenv_add_builtin(e, "eval",  builtin_eval);
+    lenv_add_builtin(e, "join",  builtin_join);
+    lenv_add_builtin(e, "min",   builtin_min);
+    lenv_add_builtin(e, "max",   builtin_max);
+    lenv_add_builtin(e, "+",     builtin_add);
+    lenv_add_builtin(e, "-",     builtin_sub);
+    lenv_add_builtin(e, "*",     builtin_mul);
+    lenv_add_builtin(e, "/",     builtin_div);
+    lenv_add_builtin(e, "%",     builtin_mod);
+    lenv_add_builtin(e, "^",     builtin_pow);
+    lenv_add_builtin(e, "if",    builtin_if);
+    lenv_add_builtin(e, "==",    builtin_eq);
+    lenv_add_builtin(e, "!=",    builtin_ne);
+    lenv_add_builtin(e, ">",     builtin_gt);
+    lenv_add_builtin(e, "<",     builtin_lt);
+    lenv_add_builtin(e, ">=",    builtin_ge);
+    lenv_add_builtin(e, "<=",    builtin_le);
+    lenv_add_builtin(e, "!",     builtin_not);
+    lenv_add_builtin(e, "&&",    builtin_and);
+    lenv_add_builtin(e, "||",    builtin_or);
     lenv_add_builtin(e, "load",  builtin_load);
     lenv_add_builtin(e, "print", builtin_print);
     lenv_add_builtin(e, "read",  builtin_read);
     lenv_add_builtin(e, "error", builtin_error);
     lenv_add_builtin(e, "type",  builtin_type);
-
-    lenv_add_builtin(e, "def", builtin_def);
-    lenv_add_builtin(e, "=",   builtin_put);
-    lenv_add_builtin(e, "\\",  builtin_lambda);
-    lenv_add_builtin(e, "fn",  builtin_fn);
+    lenv_add_builtin(e, "def",   builtin_def);
+    lenv_add_builtin(e, "=",     builtin_put);
+    lenv_add_builtin(e, "\\",    builtin_lambda);
+    lenv_add_builtin(e, "fn",    builtin_fn);
 
     /* atoms */
     lenv_add_builtin_const(e, "ok",    lval_create_ok());
@@ -260,6 +260,15 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin_const(e, "true",  lval_create_bool(true));
     lenv_add_builtin_const(e, "false", lval_create_bool(false));
     lenv_add_builtin_const(e, "exit",  lval_create_exit());
+}
+
+/*
+    registers all symbols in an environment as builtin names
+*/
+void _register_builtin_names_from_env(Lenv_t* e) {
+    for (int i = 0; i < e->count; ++i) {
+        _register_builtin_name(e->syms[i]);
+    }
 }
 
 void _del_builtin_names(void) {
@@ -613,11 +622,11 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 x->num.f = (double)x->num.li;
             }
 
-            if (strncmp(op, "+", 1) == 0) x->num.f += y->num.f;
-            if (strncmp(op, "-", 1) == 0) x->num.f -= y->num.f;
-            if (strncmp(op, "*", 1) == 0) x->num.f *= y->num.f;
-            if (strncmp(op, "^", 1) == 0) x->num.f = pow(x->num.f, y->num.f);
-            if (strncmp(op, "%", 1) == 0) {
+            if      (strncmp(op, "+", 1) == 0) x->num.f += y->num.f;
+            else if (strncmp(op, "-", 1) == 0) x->num.f -= y->num.f;
+            else if (strncmp(op, "*", 1) == 0) x->num.f *= y->num.f;
+            else if (strncmp(op, "^", 1) == 0) x->num.f = pow(x->num.f, y->num.f);
+            else if (strncmp(op, "%", 1) == 0) {
                 if (y->num.f == 0.0) {
                     lval_del(x);
                     lval_del(y);
@@ -626,7 +635,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 }
                 x->num.f = fmod(x->num.f, y->num.f);
             }
-            if (strncmp(op, "/", 1) == 0) {
+            else if (strncmp(op, "/", 1) == 0) {
                 if (y->num.f == 0.0) {
                     lval_del(x);
                     lval_del(y);
@@ -636,11 +645,11 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 x->num.f /= y->num.f;
             }
         } else {
-            if (strncmp(op, "+", 1) == 0) x->num.li += y->num.li;
-            if (strncmp(op, "-", 1) == 0) x->num.li -= y->num.li;
-            if (strncmp(op, "*", 1) == 0) x->num.li *= y->num.li;
-            if (strncmp(op, "^", 1) == 0) x->num.li = (long)pow(x->num.li, y->num.li);
-            if (strncmp(op, "%", 1) == 0) {
+            if      (strncmp(op, "+", 1) == 0) x->num.li += y->num.li;
+            else if (strncmp(op, "-", 1) == 0) x->num.li -= y->num.li;
+            else if (strncmp(op, "*", 1) == 0) x->num.li *= y->num.li;
+            else if (strncmp(op, "^", 1) == 0) x->num.li = (long)pow(x->num.li, y->num.li);
+            else if (strncmp(op, "%", 1) == 0) {
                 if (y->num.li == 0) {
                     lval_del(x);
                     lval_del(y);
@@ -649,7 +658,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 }
                 x->num.li %= y->num.li;
             }
-            if (strncmp(op, "/", 1) == 0) {
+            else if (strncmp(op, "/", 1) == 0) {
                 if (y->num.li == 0) {
                     lval_del(x);
                     lval_del(y);
@@ -754,19 +763,19 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
             x->type = LVAL_DECIMAL;
             x->num.f = (double)x->num.li;
         }
-        if (strncmp(op, ">", 1) == 0) res->num.li = x->num.f > y->num.f;
-        if (strncmp(op, "<", 1) == 0) res->num.li = x->num.f < y->num.f;
-        if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.f >= y->num.f;
-        if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.f <= y->num.f;
-        if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.f && y->num.f;
-        if (strncmp(op, "||", 2) == 0) res->num.li = x->num.f || y->num.f;
+        if (strncmp(op, ">", 1) == 0)       res->num.li = x->num.f > y->num.f;
+        else if (strncmp(op, "<", 1) == 0)  res->num.li = x->num.f < y->num.f;
+        else if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.f >= y->num.f;
+        else if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.f <= y->num.f;
+        else if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.f && y->num.f;
+        else if (strncmp(op, "||", 2) == 0) res->num.li = x->num.f || y->num.f;
     } else {
-        if (strncmp(op, ">", 1) == 0) res->num.li = x->num.li > y->num.li;
-        if (strncmp(op, "<", 1) == 0) res->num.li = x->num.li < y->num.li;
-        if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.li >= y->num.li;
-        if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.li <= y->num.li;
-        if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.li && y->num.li;
-        if (strncmp(op, "||", 2) == 0) res->num.li = x->num.li || y->num.li;
+        if (strncmp(op, ">", 1) == 0)       res->num.li = x->num.li > y->num.li;
+        else if (strncmp(op, "<", 1) == 0)  res->num.li = x->num.li < y->num.li;
+        else if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.li >= y->num.li;
+        else if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.li <= y->num.li;
+        else if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.li && y->num.li;
+        else if (strncmp(op, "||", 2) == 0) res->num.li = x->num.li || y->num.li;
     }
 
     lval_del(a);
@@ -833,7 +842,9 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
 
         case LVAL_EXIT: return 1;
         case LVAL_OK: return 1;
-        default: assert(false && "you added a new type, but forgot to add it to copy!");
+        default:
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            assert(false);
     }
     return 0;
 }
@@ -901,8 +912,9 @@ static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
             break;
         }
         default:
-            printf("%s\n", ltype_name(v->type));
-            assert(false && "builtin_head doesn't support this type");
+            fprintf(stderr, "Function %s doesn't support this type %s\n",
+                            __func__, ltype_name(v->type));
+            assert(false);
     }
     return v;
 }
@@ -933,8 +945,9 @@ static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
             break;
         }
         default:
-            printf("%s\n", ltype_name(v->type));
-            assert(false && "builtin_tail doesn't support this type");
+            fprintf(stderr, "Function %s doesn't support this type %s\n",
+                            __func__, ltype_name(v->type));
+            assert(false);
     }
     return v;
 }
@@ -999,11 +1012,9 @@ static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn) {
         fn, symbols->count, a->count - 1);
 
     for (int i = 0; i < symbols->count; ++i) {
-        if (_lookup_builtin_name(symbols->cell[i]->sym)) {
-            LASSERT(a, false, "Function `%s` cannot define arg number [%i]"
-                              " named '%s'; builtin keyword!",
-                              fn, i + 1, symbols->cell[i]->sym);
-        }
+        LASSERT(a, !_lookup_builtin_name(symbols->cell[i]->sym), 
+            "Function `%s` cannot define arg number [%i] named '%s'; builtin keyword!",
+            fn, i + 1, symbols->cell[i]->sym);
     }
 
     for (int i = 0; i < symbols->count; ++i) {
@@ -1070,7 +1081,8 @@ static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
             break;
         }
         default:
-            assert(false && "lval_join doesn't support this type");
+            fprintf(stderr, "%s doesn't support the type %s", __func__, ltype_name(x->type));
+            assert(false);
     }
     lval_del(y);
     return x;
@@ -1129,19 +1141,19 @@ static Lval_t* lval_copy(Lval_t* v) {
         case LVAL_OK:
         case LVAL_EXIT: break;
 
-        default: assert(false && "you added a new type, but forgot to add it to copy!");
+        default:
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            assert(false);
     }
     return x;
 }
 
 static void lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val) {
-    _register_builtin_name(name);
     lenv_def(e, lval_create_sym(name), val);
 
 }
 
 static void lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn) {
-    _register_builtin_name(name);
     Lval_t* k = lval_create_sym(name);
     Lval_t* v = lval_create_fn(fn);
     lenv_put(e, k, v);
@@ -1203,6 +1215,9 @@ static Lenv_t* lenv_copy(Lenv_t* e) {
     return cpy;
 }
 
+/*
+    NOTE: this doesn't check if a symbol has been registered already.
+*/
 static void _register_builtin_name(char* name) {
     __builtins__.count++;
     __builtins__.names = realloc(__builtins__.names, sizeof(char*) * __builtins__.count);
@@ -1230,8 +1245,10 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_QEXPR:    return "Q-Expression";
         case LVAL_EXIT:     return "Exit";
         case LVAL_OK:       return "OK";
-        // TODO: use the __function__ and __number__?? to print better errors
-        default: assert(false && "you added a new type, but forgot to add it to ltype_name!");    }
+        default:
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            assert(false);
+    }
 }
 
 /*
