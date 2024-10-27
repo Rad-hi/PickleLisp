@@ -53,11 +53,18 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
 #endif
             break;
         }
+        case LVAL_OK: {
+            bool cond = val->type == LVAL_OK;
+            PRINT_VERDICT(cond, test_name);
+#ifdef EXIT_ON_FAIL
+            if (!cond) exit(-1);
+#endif
+            break;
+        }
         case LVAL_SEXPR:
         case LVAL_QEXPR:
         case LVAL_SYM:
         case LVAL_FN:
-        case LVAL_OK:
         case LVAL_EXIT:
             break;
   }
@@ -95,6 +102,13 @@ static Lval_t get_lval_str(char* s) {
     return (Lval_t){
         .type = LVAL_STR,
         .str = s
+    };
+}
+
+static Lval_t get_lval_ok(void) {
+    return (Lval_t){
+        .type = LVAL_OK,
+        .num.li = 1,
     };
 }
 
@@ -374,6 +388,61 @@ static void test_Builtin_Symbol_Redefinition_Error(mpc_parser_t* language, Lenv_
     }
 }
 
+static void test_StdLib(mpc_parser_t* language, Lenv_t* e) {
+    test_statement_t tests[] = {
+        {
+            .name = "StdLib `sum`",
+            .statement = "sum (list 4 30 30 5)",
+            .expected = get_lval_long(69)
+        },
+        {
+            .name = "StdLib `mul`",
+            .statement = "mul (list .5 2 9 3)",
+            .expected = get_lval_double(27)
+        },
+        {
+            .name = "StdLib `in`",
+            .statement = "in 4 (list 1 2 3 4 5 6)",
+            .expected = get_lval_bool(true)
+        },
+        {
+            .name = "StdLib `swap`",
+            .statement = "swap - 100 50",
+            .expected = get_lval_long(-50)
+        },
+        {
+            .name = "StdLib `filter`",
+            .statement = "eval (filter (\\ {x} {> x 2}) {5 2 .3 -7 1.69 1})",
+            .expected = get_lval_long(5)
+        },
+        {
+            .name = "StdLib `nd/map`",
+            .statement = "nd (map - {.4 5 6 7 8})",
+            .expected = get_lval_long(-5)
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
+
 static void test_Type_Inference(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t tests[] = {
         {
@@ -468,18 +537,17 @@ static void test_fn(mpc_parser_t* language, Lenv_t* e) {
     
     test_statement_t tests[] = {
         {
-            .name = "fn sum",
-            .statement = "sum 1 2 3",
-            .expected = get_lval_long(6),
-            .fn = "fn {sum & es} {eval (join (list +) es)}"
+            .name = "fn fib",
+            .statement = "fib 8",
+            .expected = get_lval_long(21),
+            .fn = "fn {fib n} { select { (== n 0) 0 } { (== n 1) 1 } { otherwise (+ (fib (- n 1)) (fib (- n 2))) } }"
         },
         {
-            .name = "fn unpack",
-            .statement = "unpack * {2 2}",
+            .name = "fn add",
+            .statement = "add 2 2",
             .expected = get_lval_long(4),
-            .fn = "fn {unpack f l} { eval (join (list f) l) }"
+            .fn = "fn {add a b} {+ a b}"
         },
-
         // keep this at the end
         {.statement = "end"},
     };
@@ -488,10 +556,11 @@ static void test_fn(mpc_parser_t* language, Lenv_t* e) {
     int i = 0;
     while (strncmp(tests[i].statement, "end", 3) != 0) {
         /*
-            STEP ONE: Register the `sum` function
+            STEP ONE: Register the `.fn` custom function
         */
         if (mpc_parse("test", tests[i].fn, language, &r)) {
-            lval_eval(e, lval_read(r.output));
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, get_lval_ok(), "fn registration");
             mpc_ast_delete(r.output);
         } else {
             printf("[FAILED] Parsing error\n");
@@ -502,7 +571,7 @@ static void test_fn(mpc_parser_t* language, Lenv_t* e) {
         }
 
         /*
-            STEP TWO: call the `sum` function and test it
+            STEP TWO: call the `.fn` custom function and test it
         */
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
@@ -618,6 +687,7 @@ int main(int argc, char** argv) {
     test_QExpressions_Strings(language, e);
     test_Builtin_Symbol_Redefinition_Error(language, e);
     test_Type_Inference(language, e);
+    test_StdLib(language, e);
     test_fn(language, e);
 
     cleanup();

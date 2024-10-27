@@ -85,11 +85,13 @@ static void _register_builtin_name(char* name);
 static bool _lookup_builtin_name(char* name);
 typedef struct {
     char** names;
+    int* lengths;
     int count;
 } Builtins_record_t;
 
 static Builtins_record_t __builtins__ = {
     .names = NULL,
+    .lengths = NULL,
     .count = 0
 };
 
@@ -275,6 +277,8 @@ void _del_builtin_names(void) {
     for (int i = 0; i < __builtins__.count; ++i) {
         free(__builtins__.names[i]);
     }
+    free(__builtins__.names);
+    free(__builtins__.lengths);
 }
 
 /*
@@ -1037,7 +1041,13 @@ static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
     for (int i = 0; i < symbols->count; ++i) {
         LASSERT(a, (symbols->cell[i]->type == LVAL_SYM),
             "Function `%s` cannot define arg [%i] of type [%s], expected [%s]",
-            __func__, i, ltype_name(symbols->cell[i]->type), ltype_name(LVAL_SYM));
+            __func__, i + 1, ltype_name(symbols->cell[i]->type), ltype_name(LVAL_SYM));
+    }
+
+    for (int i = 0; i < symbols->count; ++i) {
+        LASSERT(a, !_lookup_builtin_name(symbols->cell[i]->sym), 
+            "Function `%s` cannot define arg number [%i] named '%s'; builtin keyword!",
+            __func__, i + 1, symbols->cell[i]->sym);
     }
 
     Lval_t* fn_name = lval_pop(symbols, 0);
@@ -1217,17 +1227,27 @@ static Lenv_t* lenv_copy(Lenv_t* e) {
 
 /*
     NOTE: this doesn't check if a symbol has been registered already.
+    TOTO: change to a dynamic array (though this only happens at startup, so less critical)
+    TODOOO: (more Os, so more important) change to a hash-map, so that runtime lookup is faster
+            (though this being a contiguous array, maybe lookup is faster this way as long
+            as the number of builtins is small)
 */
 static void _register_builtin_name(char* name) {
+    size_t name_len = strlen(name);
     __builtins__.count++;
+    __builtins__.lengths = realloc(__builtins__.lengths, sizeof(int*) * __builtins__.count);
+    __builtins__.lengths[__builtins__.count - 1] = name_len;
     __builtins__.names = realloc(__builtins__.names, sizeof(char*) * __builtins__.count);
-    __builtins__.names[__builtins__.count - 1] = malloc(strlen(name) + 1);
+    __builtins__.names[__builtins__.count - 1] = malloc(name_len + 1);
     strcpy(__builtins__.names[__builtins__.count - 1], name);
 }
 
 static bool _lookup_builtin_name(char* name) {
+    const size_t l = strlen(name);
     for (int i = 0; i < __builtins__.count; ++i) {
-        if (strncmp(__builtins__.names[i], name, strlen(name)) == 0) return true;
+        if (__builtins__.lengths[i] == l && strncmp(__builtins__.names[i], name, l) == 0) {
+            return true;
+        }
     }
     return false;
 }

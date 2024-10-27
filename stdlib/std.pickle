@@ -44,7 +44,7 @@
 
 ; drop N items from the beginning of the list
 (fn {drop n l} {
-    if {== n 0}
+    if (== n 0)
     {l}
     {drop (- n 1) (tail l)}
 })
@@ -100,7 +100,7 @@
 (fn {foldl f z l} {
   if (== l nil)
     {z}
-    {foldl f (f z (fst l)) (tail l)}
+    {foldl f (f z (st l)) (tail l)}
 })
 
 (fn {sum l} {foldl + 0 l}) ; sums all elements of the list
@@ -158,7 +158,7 @@
 ; MISCELLANEOUS
 ; ------------------------------------------------------------
 
-(fn {swap f a b} {f b a})  ; applies `f` to `a b` in swapped order
+(fn {swap f a b} {f b a})
 (fn {comp f g x} {f (g x)})  ; composes f and g -> f(g(x)) [mathematically speaking]
 
 
