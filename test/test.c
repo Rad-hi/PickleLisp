@@ -46,7 +46,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
             break;
         }
         case LVAL_STR: {
-            bool cond = strcmp(val->str, expected.str) == 0;
+            bool cond = strncmp(val->str, expected.str, strlen(expected.str)) == 0;
             PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
             if (!cond) exit(-1);
@@ -236,7 +236,7 @@ static void test_QExpressions(mpc_parser_t* language, Lenv_t* e) {
     };
 
     int i = 0;
-    while (strcmp(tests[i].statement, "end") != 0) {
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
         mpc_result_t r;
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
@@ -280,7 +280,7 @@ static void test_QExpressions_Strings(mpc_parser_t* language, Lenv_t* e) {
     };
 
     int i = 0;
-    while (strcmp(tests[i].statement, "end") != 0) {
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
         mpc_result_t r;
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
@@ -319,7 +319,7 @@ static void test_Boolean(mpc_parser_t* language, Lenv_t* e) {
     };
 
     int i = 0;
-    while (strcmp(tests[i].statement, "end") != 0) {
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
         mpc_result_t r;
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
@@ -358,7 +358,7 @@ static void test_Builtin_Symbol_Redefinition_Error(mpc_parser_t* language, Lenv_
     };
 
     int i = 0;
-    while (strcmp(tests[i].statement, "end") != 0) {
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
         mpc_result_t r;
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
@@ -402,7 +402,7 @@ static void test_Type_Inference(mpc_parser_t* language, Lenv_t* e) {
     };
 
     int i = 0;
-    while (strcmp(tests[i].statement, "end") != 0) {
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
         mpc_result_t r;
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
@@ -441,7 +441,7 @@ static void test_Conditional(mpc_parser_t* language, Lenv_t* e) {
     };
 
     int i = 0;
-    while (strcmp(tests[i].statement, "end") != 0) {
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
         mpc_result_t r;
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
@@ -457,7 +457,10 @@ static void test_Conditional(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
-
+/*
+    NOTE: This test registers functions into the global environment
+    be careful of using the same language instance after this test
+*/
 static void test_fn(mpc_parser_t* language, Lenv_t* e) {
     /*
         STEP ZERO: Define the unit test for the `sum` function
@@ -483,7 +486,7 @@ static void test_fn(mpc_parser_t* language, Lenv_t* e) {
 
     mpc_result_t r;
     int i = 0;
-    while (strcmp(tests[i].statement, "end") != 0) {
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
         /*
             STEP ONE: Register the `sum` function
         */
@@ -610,12 +613,12 @@ int main(int argc, char** argv) {
     test_syntax_err(language, e);
     test_NonNumber_err(language, e);
     test_QExpressions(language, e);
-    test_fn(language, e);
     test_Boolean(language, e);
     test_Conditional(language, e);
     test_QExpressions_Strings(language, e);
     test_Builtin_Symbol_Redefinition_Error(language, e);
     test_Type_Inference(language, e);
+    test_fn(language, e);
 
     cleanup();
     lenv_del(e);

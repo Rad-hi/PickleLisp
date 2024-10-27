@@ -313,7 +313,7 @@ Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
     char* filename = a->cell[0]->str;
     size_t base_name_len = strlen(filename) - strlen(EXTENSION);
     char* end = filename + (base_name_len > 0 ? base_name_len : 0);
-    LASSERT(a, strcmp(end , EXTENSION) == 0,
+    LASSERT(a, strncmp(end , EXTENSION, strlen(EXTENSION)) == 0,
             "Function `%s` expects a file with the extension [%s], got [%s]",
             __func__, EXTENSION, filename);
 
@@ -501,7 +501,7 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
         Lval_t* sym = lval_pop(fn->formals, 0);
 
         /* Special case where we have a variable number of arguments, syntax `sym & syms` */
-        if (strcmp(sym->sym, "&") == 0) {
+        if (strncmp(sym->sym, "&", 1) == 0) {
             if (fn->formals->count != 1) {
                 lval_del(a);
                 return lval_create_err("Invalid format; "
@@ -527,7 +527,7 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
         Done with user input (only supplied named args, no va_args), but fn formals
         still have the `&` in them -> change to empty list
     */
-    if (fn->formals->count > 0 && strcmp(fn->formals->cell[0]->sym, "&") == 0) {
+    if (fn->formals->count > 0 && strncmp(fn->formals->cell[0]->sym, "&", 1) == 0) {
         if (fn->formals->count != 2) {
             return lval_create_err("Invalid format; symbol `&` must "
                                     "be followed by a single symbol");
@@ -594,7 +594,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
     if (x->type == LVAL_BOOL) x->type = LVAL_INTEGER;
 
     // no arguments provided and `op` is `-` then perform negation
-    if ((strcmp(op, "-") == 0) && a->count == 0) {
+    if ((strncmp(op, "-", 1) == 0) && a->count == 0) {
         if (x->type == LVAL_INTEGER) x->num.li = -x->num.li;
         else if (x->type == LVAL_DECIMAL) x->num.f = -x->num.f;
     }
@@ -613,11 +613,11 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 x->num.f = (double)x->num.li;
             }
 
-            if (strcmp(op, "+") == 0) x->num.f += y->num.f;
-            if (strcmp(op, "-") == 0) x->num.f -= y->num.f;
-            if (strcmp(op, "*") == 0) x->num.f *= y->num.f;
-            if (strcmp(op, "^") == 0) x->num.f = pow(x->num.f, y->num.f);
-            if (strcmp(op, "%") == 0) {
+            if (strncmp(op, "+", 1) == 0) x->num.f += y->num.f;
+            if (strncmp(op, "-", 1) == 0) x->num.f -= y->num.f;
+            if (strncmp(op, "*", 1) == 0) x->num.f *= y->num.f;
+            if (strncmp(op, "^", 1) == 0) x->num.f = pow(x->num.f, y->num.f);
+            if (strncmp(op, "%", 1) == 0) {
                 if (y->num.f == 0.0) {
                     lval_del(x);
                     lval_del(y);
@@ -626,7 +626,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 }
                 x->num.f = fmod(x->num.f, y->num.f);
             }
-            if (strcmp(op, "/") == 0) {
+            if (strncmp(op, "/", 1) == 0) {
                 if (y->num.f == 0.0) {
                     lval_del(x);
                     lval_del(y);
@@ -636,11 +636,11 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 x->num.f /= y->num.f;
             }
         } else {
-            if (strcmp(op, "+") == 0) x->num.li += y->num.li;
-            if (strcmp(op, "-") == 0) x->num.li -= y->num.li;
-            if (strcmp(op, "*") == 0) x->num.li *= y->num.li;
-            if (strcmp(op, "^") == 0) x->num.li = (long)pow(x->num.li, y->num.li);
-            if (strcmp(op, "%") == 0) {
+            if (strncmp(op, "+", 1) == 0) x->num.li += y->num.li;
+            if (strncmp(op, "-", 1) == 0) x->num.li -= y->num.li;
+            if (strncmp(op, "*", 1) == 0) x->num.li *= y->num.li;
+            if (strncmp(op, "^", 1) == 0) x->num.li = (long)pow(x->num.li, y->num.li);
+            if (strncmp(op, "%", 1) == 0) {
                 if (y->num.li == 0) {
                     lval_del(x);
                     lval_del(y);
@@ -649,7 +649,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 }
                 x->num.li %= y->num.li;
             }
-            if (strcmp(op, "/") == 0) {
+            if (strncmp(op, "/", 1) == 0) {
                 if (y->num.li == 0) {
                     lval_del(x);
                     lval_del(y);
@@ -801,10 +801,22 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
             return x->num.li == y->num.li;
         case LVAL_DECIMAL: return x->num.f == y->num.f;
 
-        case LVAL_STR: return strcmp(x->str, y->str) == 0;
-        case LVAL_ERR: return strcmp(x->err, y->err) == 0;
-        case LVAL_SYM: return strcmp(x->sym, y->sym) == 0;
-        
+        case LVAL_STR: {
+            int l1, l2;
+            if ((l1 = strlen(x->str)) != (l2 = strlen(y->str))) return false;
+            return strncmp(x->str, y->str, l1) == 0;
+        }
+        case LVAL_ERR: {
+            int l1, l2;
+            if ((l1 = strlen(x->err)) != (l2 = strlen(y->err))) return false;
+            return strncmp(x->err, y->err, l1) == 0;
+        }
+        case LVAL_SYM: {
+            int l1, l2;
+            if ((l1 = strlen(x->sym)) != (l2 = strlen(y->sym))) return false;
+            return strncmp(x->sym, y->sym, l1) == 0;
+        }
+
         case LVAL_FN: {
             if (x->builtin || y->builtin) return x->builtin == y->builtin;
             else return lval_eq(x->formals, y->formals) && lval_eq(x->body, y->body);
@@ -1200,7 +1212,7 @@ static void _register_builtin_name(char* name) {
 
 static bool _lookup_builtin_name(char* name) {
     for (int i = 0; i < __builtins__.count; ++i) {
-        if (strcmp(__builtins__.names[i], name) == 0) return true;
+        if (strncmp(__builtins__.names[i], name, strlen(name)) == 0) return true;
     }
     return false;
 }
