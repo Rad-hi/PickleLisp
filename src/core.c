@@ -89,6 +89,9 @@ typedef struct {
     int count;
 } Builtins_record_t;
 
+// TODO: Change to a hash-map, so that runtime lookup is faster
+//       (though this being a contiguous array, maybe lookup is faster
+//       this way as long as the number of builtins is small)
 static Builtins_record_t __builtins__ = {
     .names = NULL,
     .lengths = NULL,
@@ -101,23 +104,23 @@ static Builtins_record_t __builtins__ = {
   based on theirs tags which are defined in grammar.h
 */
 Lval_t* lval_read(mpc_ast_t* ast) {
-    if (strstr(ast->tag, "integer")) return lval_read_long(ast);
-    if (strstr(ast->tag, "decimal")) return lval_read_double(ast);
-    if (strstr(ast->tag, "string"))  return lval_read_str(ast);
-    if (strstr(ast->tag, "symbol"))  return lval_create_sym(ast->contents);
+    if      (strstr(ast->tag, "integer")) return lval_read_long(ast);
+    else if (strstr(ast->tag, "decimal")) return lval_read_double(ast);
+    else if (strstr(ast->tag, "string"))  return lval_read_str(ast);
+    else if (strstr(ast->tag, "symbol"))  return lval_create_sym(ast->contents);
 
     Lval_t* x = NULL;
-    if (strncmp(ast->tag, ">", 1) == 0) x = lval_create_sexpr();
-    if (strstr(ast->tag, "sexpr")) x = lval_create_sexpr();
-    if (strstr(ast->tag, "qexpr")) x = lval_create_qexpr();
+    if      (strncmp(ast->tag, ">", 1) == 0) x = lval_create_sexpr();
+    else if (strstr(ast->tag, "sexpr")) x = lval_create_sexpr();
+    else if (strstr(ast->tag, "qexpr")) x = lval_create_qexpr();
 
     for (int i = 0; i < ast->children_num; ++i) {
-        if (strstr(ast->children[i]->tag, "comment"))         continue;
-        if (strncmp(ast->children[i]->contents, "(", 1) == 0) continue;
-        if (strncmp(ast->children[i]->contents, ")", 1) == 0) continue;
-        if (strncmp(ast->children[i]->contents, "{", 1) == 0) continue;
-        if (strncmp(ast->children[i]->contents, "}", 1) == 0) continue;
-        if (strncmp(ast->children[i]->tag,  "regex", 5) == 0) continue;
+        if      (strncmp(ast->children[i]->contents, "(", 1) == 0) continue;
+        else if (strncmp(ast->children[i]->contents, ")", 1) == 0) continue;
+        else if (strncmp(ast->children[i]->contents, "{", 1) == 0) continue;
+        else if (strncmp(ast->children[i]->contents, "}", 1) == 0) continue;
+        else if (strncmp(ast->children[i]->tag,  "regex", 5) == 0) continue;
+        else if (strstr(ast->children[i]->tag, "comment"))         continue;
         x = lval_add(x, lval_read(ast->children[i]));
     }
 
@@ -1227,10 +1230,6 @@ static Lenv_t* lenv_copy(Lenv_t* e) {
 
 /*
     NOTE: this doesn't check if a symbol has been registered already.
-    TOTO: change to a dynamic array (though this only happens at startup, so less critical)
-    TODOOO: (more Os, so more important) change to a hash-map, so that runtime lookup is faster
-            (though this being a contiguous array, maybe lookup is faster this way as long
-            as the number of builtins is small)
 */
 static void _register_builtin_name(char* name) {
     size_t name_len = strlen(name);

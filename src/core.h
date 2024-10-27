@@ -6,8 +6,8 @@
 #include "config.h"
 #include "mpc.h"
 
-#define min(a, b)       ((a) > (b) ? (b) : (a))
-#define max(a, b)       ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) > (b) ? (b) : (a))
+#define max(a, b) ((a) > (b) ? (a) : (b))
 
 #define IS_NUM(a, idx)                    \
     (a->cell[idx]->type == LVAL_INTEGER   \
