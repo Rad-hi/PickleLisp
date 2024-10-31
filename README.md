@@ -1,3 +1,5 @@
+![PickleLisp CI](https://github.com/Rad-hi/PickleLisp/actions/workflows/tests.yml/badge.svg)
+
 ## Building a custom LISP called PickleLisp
 
 Following the book: https://www.buildyourownlisp.com/contents
