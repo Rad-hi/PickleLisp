@@ -33,7 +33,7 @@
   LASSERT(arg, arg->count == num,                                          \
     "Function `%s` expects [%i] arguments, got [%i]", fn, num, arg->count)
 
-/* the language defined in grammar.h */
+/* the language defined in lang.h */
 extern mpc_parser_t* pickle_lisp;
 
 struct Lval_t;

@@ -101,7 +101,7 @@ static Builtins_record_t __builtins__ = {
 
 /*
   Recursively constructs the list of values (lval)
-  based on theirs tags which are defined in grammar.h
+  based on theirs tags which are defined in lang.h
 */
 Lval_t* lval_read(mpc_ast_t* ast) {
     if      (strstr(ast->tag, "integer")) return lval_read_long(ast);
