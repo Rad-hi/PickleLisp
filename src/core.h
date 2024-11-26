@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <dlfcn.h>
 
 #include "config.h"
 #include "mpc.h"
@@ -42,6 +43,8 @@ typedef struct Lval_t Lval_t;
 typedef struct Lenv_t Lenv_t;
 
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
+typedef void* (*Extern_fn_t) ();
+
 
 typedef enum {
     LVAL_INTEGER,
@@ -53,6 +56,7 @@ typedef enum {
     LVAL_FN,
     LVAL_SEXPR,
     LVAL_QEXPR,
+    LVAL_DLL,
     LVAL_EXIT,
     LVAL_OK,
 } LVAL_e;
@@ -80,12 +84,15 @@ struct Lval_t {
         char* err;
         char* sym;
         Lbuiltin_t builtin;
+        void* dll;
     };
 
     /* Functions' stuff (along with builtin) */
     Lenv_t* env;
     Lval_t* formals;
     Lval_t* body;
+    Extern_fn_t extern_fn;  // Ref: https://stackoverflow.com/a/1354669
+
 
     /* Expression */
     int count;

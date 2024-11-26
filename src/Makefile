@@ -9,7 +9,7 @@
 CC = cc
 
 CFLAGS = -Wall -g
-LFLAGS = -ledit -lm
+LFLAGS = -ledit -lm -ldl
 
 INCLUDES = -I../mpc
 SRCS = pickle_lisp.c ../mpc/mpc.c core.c lang.c

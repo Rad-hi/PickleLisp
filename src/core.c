@@ -41,6 +41,9 @@ static Lval_t* builtin_print(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_read(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_type(Lenv_t* e, Lval_t* a);
 
+static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a);
+
 static void    lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val);
 static void    lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn);
 static void    lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v);
@@ -71,6 +74,7 @@ static Lval_t* lval_create_err(char* fmt, ...);
 static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
+static Lval_t* lval_create_dll(void* dll);
 
 static void    lval_expr_print(Lval_t* v, char open, char close);
 static char*   ltype_name(LVAL_e t);
@@ -153,6 +157,8 @@ void lval_del(Lval_t* v) {
         case LVAL_ERR: free(v->err); break;
         case LVAL_SYM: free(v->sym); break;
 
+        case LVAL_DLL: dlclose(v->dll); break;
+
         case LVAL_QEXPR:
         case LVAL_SEXPR: {
             for (int i = 0; i < v->count; ++i) {
@@ -179,6 +185,7 @@ void lval_print(Lval_t* v) {
         case LVAL_SEXPR:   lval_expr_print(v, '(', ')'); break;
         case LVAL_QEXPR:   lval_expr_print(v, '{', '}'); break;
         case LVAL_EXIT:    printf("Exiting"); break;
+        case LVAL_DLL:     printf("Dynamic library"); break;
         case LVAL_OK:      break;
         case LVAL_FN: {
             if (v->builtin != NULL) {
@@ -258,6 +265,9 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "=",     builtin_put);
     lenv_add_builtin(e, "\\",    builtin_lambda);
     lenv_add_builtin(e, "fn",    builtin_fn);
+
+    lenv_add_builtin(e, "dll", builtin_dll);
+    lenv_add_builtin(e, "extern", builtin_extern);
 
     /* atoms */
     lenv_add_builtin_const(e, "ok",    lval_create_ok());
@@ -503,6 +513,27 @@ static Lval_t* lval_read_str(mpc_ast_t* ast) {
 static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
     if (fn->builtin != NULL) return fn->builtin(e, a);
 
+    if (fn->extern_fn != NULL) {
+        switch (fn->formals->count) {
+            case 0:
+                // TODO: some functions can return values, get them
+                fn->extern_fn();
+            break;
+            case 3:
+                // TODO: use the fn mechanism, or new one to get input into the functions
+                // HARDCODED InitWindow
+                fn->extern_fn(960, 540, "Test title");
+            break;
+            case 5:
+                // HARDCODED DrawText
+                fn->extern_fn("Hello, from PickleLisp",
+                              190, 200, 20,
+                              (char[4]){125, 125, 125, 125});
+            break;
+        }
+        return lval_create_ok();
+    }
+
     int given = a->count;
     int total = fn->formals->count;
 
@@ -529,7 +560,6 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
             lval_del(sym_list);
             break;
         }
-
 
         Lval_t* val = lval_pop(a, 0);
         lenv_put(fn->env, sym, val);  // register into the func "local" environment
@@ -1111,12 +1141,16 @@ static Lval_t* lval_copy(Lval_t* v) {
                 x->builtin = v->builtin;
             } else {
                 x->builtin = NULL;
+                x->extern_fn = v->extern_fn;
                 x->env = lenv_copy(v->env);
                 x->formals = lval_copy(v->formals);
                 x->body = lval_copy(v->body);
             }
             break;
         }
+
+        case LVAL_DLL:
+            x->dll = v->dll; break;
 
         case LVAL_DECIMAL:
             x->num.f = v->num.f; break;
@@ -1264,6 +1298,7 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_QEXPR:    return "Q-Expression";
         case LVAL_EXIT:     return "Exit";
         case LVAL_OK:       return "OK";
+        case LVAL_DLL:      return "DLL";
         default:
             fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
             assert(false);
@@ -1369,6 +1404,7 @@ static Lval_t* builtin_type(Lenv_t* e, Lval_t* a) {
         case LVAL_BOOL:
         case LVAL_SEXPR:
         case LVAL_QEXPR:
+        case LVAL_DLL:
             return lval_create_str(ltype_name(val->type));
 
         case LVAL_SYM:
@@ -1382,4 +1418,67 @@ static Lval_t* builtin_type(Lenv_t* e, Lval_t* a) {
     }
 
     LASSERT(val, false, "Function `%s` cannot find arg [%s]", __func__, val->sym);
+}
+
+static Lval_t* lval_create_dll(void* dll) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_DLL;
+    v->dll = dll;
+    return v;
+}
+
+// Ref: https://linux.die.net/man/3/dlopen
+static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM(__func__, a, 2);
+    LASSERT_TYPE(__func__, a, 0, LVAL_STR);
+    LASSERT_TYPE(__func__, a, 1, LVAL_STR);
+
+    char* name = a->cell[0]->str;
+    char* path = a->cell[1]->str;
+    void* dll = dlopen(path, RTLD_NOW|RTLD_GLOBAL);
+    if (!dll) {
+        return lval_create_err("[%s] -- Couldn't load DLL `%s`. ERROR: %s", __func__, name, dlerror());
+    }
+    dlerror();
+
+    Lval_t* dll_name = lval_create_str(name);
+    lenv_def(e, dll_name, lval_create_dll(dll));
+    lval_del(a);
+    return lval_create_ok();
+}
+
+
+static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM(__func__, a, 3);
+    LASSERT_TYPE(__func__, a, 0, LVAL_DLL);
+    LASSERT_TYPE(__func__, a, 1, LVAL_STR);
+    LASSERT_TYPE(__func__, a, 2, LVAL_QEXPR);
+    // TODO: expect an output type, that's part of C-Types (or something like this)
+
+    // TODO: make ctypes and add the check for them
+    // Lval_t* symbols = a->cell[2];
+    // /* Q-expr must only contain c-types */
+    // for (int i = 0; i < symbols->count; ++i) {
+    //     LASSERT(a, (symbols->cell[i]->type == LVAL_SYM),
+    //         "Function `%s` cannot define arg [%i] of type [%s], expected [%s]",
+    //         __func__, i + 1, ltype_name(symbols->cell[i]->type), ltype_name(LVAL_SYM));
+    // }
+
+    void* dll = a->cell[0]->dll;
+    char* fn_name = a->cell[1]->str;
+
+    Extern_fn_t ptr;
+    *(void **) (&ptr) = dlsym(dll, fn_name);
+    char* error = dlerror();
+    if (error != NULL) {
+        return lval_create_err("[%s] -- Couldn't load symbol %s from DLL. ERROR: %s", __func__, fn_name, dlerror());
+    }
+    dlerror();
+
+    Lval_t* formals = lval_pop(a, 2);
+    Lval_t* fn = lval_create_lambda(formals, lval_create_sexpr());
+    fn->extern_fn = ptr;
+    lenv_def(e, a->cell[1], fn);
+
+    return lval_create_ok();
 }
