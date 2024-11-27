@@ -9,7 +9,7 @@
 CC = cc
 
 CFLAGS = -Wall -g -DEXIT_ON_FAIL
-LFLAGS = -ledit -lm
+LFLAGS = -ledit -lm -ldl
 
 INCLUDES = -I../mpc -I../src
 SRCS = test.c ../mpc/mpc.c ../src/core.c ../src/lang.c

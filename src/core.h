@@ -43,7 +43,7 @@ typedef struct Lval_t Lval_t;
 typedef struct Lenv_t Lenv_t;
 
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
-typedef void* (*Extern_fn_t) ();
+typedef int (*Extern_fn_t) ();
 
 
 typedef enum {
@@ -91,6 +91,8 @@ struct Lval_t {
     Lenv_t* env;
     Lval_t* formals;
     Lval_t* body;
+
+    bool is_extern;
     Extern_fn_t extern_fn;  // Ref: https://stackoverflow.com/a/1354669
 
 

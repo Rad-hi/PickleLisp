@@ -403,12 +403,16 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
     v->env = lenv_new();
     v->formals = formals;
     v->body = body;
+    v->extern_fn = NULL;
+    v->is_extern = false;
     return v;
 }
 
 static Lval_t* lval_create_fn(Lbuiltin_t fn) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_FN;
+    v->extern_fn = NULL;
+    v->is_extern = false;
     v->builtin = fn;
     return v;
 }
@@ -507,28 +511,44 @@ static Lval_t* lval_read_str(mpc_ast_t* ast) {
     return str;
 }
 
+
+typedef struct ColorStruct {
+    char r;
+    char g;
+    char b;
+    char a;
+} ColorStruct;
+
 /*
     Dispatches function calls based on whether it's a builtin or a user-defined one
 */
 static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
     if (fn->builtin != NULL) return fn->builtin(e, a);
 
-    if (fn->extern_fn != NULL) {
+    if (fn->is_extern && fn->extern_fn != NULL) {
+        // TODO: use the fn mechanism, or new one to get input into the functions
         switch (fn->formals->count) {
-            case 0:
-                // TODO: some functions can return values, get them
+            case 1:
+                // HARDCODED All the `void func(void)`
                 fn->extern_fn();
             break;
+            case 2:
+                // HARDCODED SetTargetFPS
+                fn->extern_fn(30);
+            break;
             case 3:
-                // TODO: use the fn mechanism, or new one to get input into the functions
                 // HARDCODED InitWindow
                 fn->extern_fn(960, 540, "Test title");
+            break;
+            case 4:
+                // TODO: some functions can return values, get them
+                return lval_create_bool(fn->extern_fn());
             break;
             case 5:
                 // HARDCODED DrawText
                 fn->extern_fn("Hello, from PickleLisp",
-                              190, 200, 20,
-                              (char[4]){125, 125, 125, 125});
+                              (960 - 220) / 2, 200, 20,
+                              (ColorStruct){189, 88, 110, 255});
             break;
         }
         return lval_create_ok();
@@ -1134,6 +1154,7 @@ static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
 static Lval_t* lval_copy(Lval_t* v) {
     Lval_t* x = malloc(sizeof(Lval_t));
     x->type = v->type;
+    x->is_extern = v->is_extern;
 
     switch (v->type) {
         case LVAL_FN: {
@@ -1478,6 +1499,7 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     Lval_t* formals = lval_pop(a, 2);
     Lval_t* fn = lval_create_lambda(formals, lval_create_sexpr());
     fn->extern_fn = ptr;
+    fn->is_extern = true;
     lenv_def(e, a->cell[1], fn);
 
     return lval_create_ok();
