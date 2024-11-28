@@ -2,7 +2,8 @@
 
 ## Building a custom LISP called PickleLisp
 
-Following the book: https://www.buildyourownlisp.com/contents
+It started by following this book: https://www.buildyourownlisp.com/contents
+Though from the start, I followed a slightly different coding style, and kept adding features of my own here and there as I was progressing through the code. Additionally, I added unit tests early on to help me move faster through the book, and to ensure a more certain iterating process.
 
 ### Brief
 
