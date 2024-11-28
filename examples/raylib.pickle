@@ -13,19 +13,19 @@
 
 ; NOTE: I haven't implemented tail call optimization yet,
 ; so this will eventually overflow the stack
-(fn {loop func} {
-    if (== (func()) true)
-    { loop done}
+( fn { loop func } {
+    if ( == (func {} ) true )
+    { loop done }
     {
-        do (BeginDrawing())
+        do ( BeginDrawing {} )
                 ; Draw your stuff hereeee
-                (DrawText())
-            (EndDrawing())
-        (loop func)
+                ( DrawText {} )
+            ( EndDrawing {} )
+        ( loop func )
     }
 })
 
-(InitWindow())
-(SetTargetFPS())
-(loop WindowShouldClose)
-(CloseWindow())
+( InitWindow {} )
+( SetTargetFPS {} )
+( loop WindowShouldClose)
+( CloseWindow {} )
