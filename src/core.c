@@ -1488,7 +1488,7 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     void* dll = a->cell[0]->dll;
     char* fn_name = a->cell[1]->str;
 
-    Extern_fn_t ptr;
+    Generic_fn_ptr_t ptr;
     *(void **) (&ptr) = dlsym(dll, fn_name);
     char* error = dlerror();
     if (error != NULL) {
@@ -1501,6 +1501,7 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     fn->extern_fn = ptr;
     fn->is_extern = true;
     lenv_def(e, a->cell[1], fn);
+    // lval_del(a);
 
     return lval_create_ok();
 }

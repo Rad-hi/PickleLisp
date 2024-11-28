@@ -43,7 +43,11 @@ typedef struct Lval_t Lval_t;
 typedef struct Lenv_t Lenv_t;
 
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
-typedef int (*Extern_fn_t) ();
+
+// Ref: https://stackoverflow.com/a/1354669
+// these might not return anything, but the `int` return type
+// is for the compiler to shut up about return type
+typedef int (*Generic_fn_ptr_t) ();
 
 
 typedef enum {
@@ -93,8 +97,7 @@ struct Lval_t {
     Lval_t* body;
 
     bool is_extern;
-    Extern_fn_t extern_fn;  // Ref: https://stackoverflow.com/a/1354669
-
+    Generic_fn_ptr_t extern_fn;
 
     /* Expression */
     int count;

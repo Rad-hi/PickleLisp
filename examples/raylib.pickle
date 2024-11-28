@@ -9,18 +9,16 @@
 (extern raylib "SetTargetFPS" {a b})
 
 
-(fn {done} {false})
-
 ; NOTE: I haven't implemented tail call optimization yet,
 ; so this will eventually overflow the stack
 ( fn { loop func } {
     if ( == (func {} ) true )
-    { loop done }
+    { nil }
     {
-        do ( BeginDrawing {} )
-                ; Draw your stuff hereeee
-                ( DrawText {} )
-            ( EndDrawing {} )
+        do  
+        ( BeginDrawing {} )
+            ( DrawText {} )
+        ( EndDrawing {} )
         ( loop func )
     }
 })
