@@ -1,29 +1,64 @@
 (dll "raylib" "../raylib-5.5_linux_amd64/lib/libraylib.so")
 
-(extern raylib "InitWindow" {w h title})
-(extern raylib "WindowShouldClose" {a b c d})
-(extern raylib "BeginDrawing" {r})
-(extern raylib "EndDrawing" {r})
-(extern raylib "CloseWindow" {r})
-(extern raylib "DrawText" {msg x y sz color})
-(extern raylib "SetTargetFPS" {a b})
+(extern raylib "InitWindow" {Int Int String} {Void})
+(extern raylib "WindowShouldClose" {Void} {Int})
+(extern raylib "BeginDrawing" {Void} {Void})
+(extern raylib "EndDrawing" {Void} {Void})
+(extern raylib "CloseWindow" {Void} {Void})
+(extern raylib "DrawText" {String Int Int Int Color} {Void})
+(extern raylib "SetTargetFPS" {Int} {Void})
+(extern raylib "ClearBackground" {Color} {Void})
+
+( def {ZOZINGRAY}   (list 22 22 22 255) )
+( def {RAYWHITE}    (list 245 245 245 255) )
+( def {VIOLET}      (list 135 60 190 255) )
+( def {MYPINK}      (list 189 88 110 255) )
+( def {GOLD}        (list 255 203 0 255) )
+( def {SKYBLUE}     (list 102 191 255 255) )
+
+( def {FPS} 30 )
+( def {title} "PcikleLisp RayLib Example" )
+( def {win_width} 960 )
+( def {win_height} 480 )
+
+( def {msg} "Hello, from PickleLisp!" )
+( def {font_sz} 32 )
+( def {msg_len} 23 )  ; TODO: make function `len` work on strings
+( def {viz_msg_len} (* msg_len (/ font_sz 2)) )
+
+( def {x} (/ (- win_width viz_msg_len ) 2) )
+( def {y} (/ (- win_height font_sz) 2) )
+
+( def {dx} 5)
+( def {dy} 5)
+
+( def {col_list} (list MYPINK VIOLET SKYBLUE GOLD) )
+( def {n_cols} (len col_list) )
+( def {idx} 0 )
 
 
-; NOTE: I haven't implemented tail call optimization yet,
-; so this will eventually overflow the stack
 ( fn { loop func } {
-    if ( == (func {} ) true )
+
+    if ( == ( func {} ) true )
     { nil }
     {
-        do  
+        do
         ( BeginDrawing {} )
-            ( DrawText {} )
+            ( ClearBackground ZOZINGRAY )
+            ( def {x} (+ x dx) )
+            ( if ( or (>= (+ x viz_msg_len) win_width) (< x 0)) { do ( def {dx} (- dx) ) ( def {idx} (+ idx 1) ) } { nil } )
+            ( def {y} (+ y dy) )
+            ( if ( or (>= (+ y font_sz) win_height) (< y 0)) { do ( def {dy} (- dy) ) ( def {idx} (+ idx 1) )} { nil } )
+            ( def {idx} (% idx n_cols) )
+            ( DrawText msg x y font_sz (nth idx col_list) )
+            ;; (print (list dx dy) )
         ( EndDrawing {} )
         ( loop func )
     }
 })
 
-( InitWindow {} )
-( SetTargetFPS {} )
+
+( InitWindow win_width win_height title )
+( SetTargetFPS FPS )
 ( loop WindowShouldClose)
 ( CloseWindow {} )
