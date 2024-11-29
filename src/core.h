@@ -61,6 +61,7 @@ typedef enum {
     C_DOUBLE,
     C_STRING,
     C_COLOR,
+
     N_TYPES,
 } CTypes_e;
 
@@ -109,8 +110,8 @@ struct Lval_t {
 
     /* Functions' stuff (along with builtin) */
     Lenv_t* env;
-    Lval_t* formals;
-    Lval_t* body;
+    Lval_t* formals;  // used to define a function's input variables (fn), and signature (extern)
+    Lval_t* body;  // used to contain the function's body (fn), and return type (extern)
 
     bool is_extern;
     Generic_fn_ptr_t extern_fn;

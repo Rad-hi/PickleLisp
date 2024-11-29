@@ -576,79 +576,81 @@ static Color_t color_from_list(Lval_t* l) {
     };
 }
 
+static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
+    int n_given = inputs->count;
+    int n_expected = fn->formals->count;
+
+    // TODO: check against provided types, and expected ones
+    if (n_given == n_expected) {
+
+        int n_ret = fn->body->count;
+        if (n_expected == 1 && n_ret == 1) {
+            // I am using the fn mechanism to do external fucntions, which takes in
+            // types, not symbols, so I need to save types as symbols, and extract
+            // the type in here .. TODD: fix this with extern functions' own mechanism
+            // (or whatever makes sense after some reading)
+            Lval_t* in = lenv_get(e, fn->formals->cell[0]);
+            Lval_t* out = lenv_get(e, fn->body->cell[0]);
+
+            // void fn(void)
+            if(in->c_type == C_VOID && out->c_type == C_VOID){
+                fn->extern_fn();
+                return lval_create_ok();
+
+            // int fn(void)
+            } else if (in->c_type == C_VOID && out->c_type == C_INT) {
+                return lval_create_bool(fn->extern_fn());
+
+            // void fn(int)
+            } else if (in->c_type == C_INT && out->c_type == C_VOID) {
+                fn->extern_fn(inputs->cell[0]->num.li);
+                return lval_create_ok();
+
+            // void fn(Color)
+            } else if (in->c_type == C_COLOR && out->c_type == C_VOID) {
+                Color_t c = color_from_list(inputs->cell[0]);
+                fn->extern_fn(c);
+                return lval_create_ok();
+            }
+        }
+
+        // HARDCODED: InitWindow
+        else if (n_expected == 3) {
+            fn->extern_fn(inputs->cell[0]->num.li, inputs->cell[1]->num.li, inputs->cell[2]->str);
+            return lval_create_ok();
+
+        // HARDCODED: DrawText
+        } else if (n_expected == 5) {
+            Lval_t* msg = inputs->cell[0];
+            Lval_t* x = inputs->cell[1];
+            Lval_t* y = inputs->cell[2];
+            Lval_t* sz = inputs->cell[3];
+            Color_t c = color_from_list(inputs->cell[4]);
+            fn->extern_fn(msg->str, x->num.li, y->num.li, sz->num.li, c);
+            return lval_create_ok();
+        }
+
+        return lval_create_err("UNREACHABLE");
+    } else {
+        lval_del(inputs);
+        return lval_create_err("Extern function expects [%i] args, got [%i].", n_expected, n_given);
+    }
+}
+
 /*
-    Dispatches function calls based on whether it's a builtin or a user-defined one
+    Dispatches function calls based on whether it's a builtin, externally linked one, or user-defined
 */
 static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
     if (fn->builtin != NULL) return fn->builtin(e, a);
+    if (fn->is_extern && fn->extern_fn != NULL) return lval_call_extern(e, fn, a);
 
     int n_given = a->count;
-    int n_expected = fn->formals->count;
-
-    if (fn->is_extern && fn->extern_fn != NULL) {
-        // TODO: check against provided types, and expected ones
-        if (n_given == n_expected) {
-
-            int n_ret = fn->body->count;
-            if (n_expected == 1 && n_ret == 1) {
-                // I am using the fn mechanism to do external fucntions, which takes in
-                // types, not symbols, so I need to save types as symbols, and extract
-                // the type in here .. TODD: fix this with extern functions' own mechanism
-                // (or whatever makes sense after some reading)
-                Lval_t* in = lenv_get(e, fn->formals->cell[0]);
-                Lval_t* out = lenv_get(e, fn->body->cell[0]);
-
-                // void fn(void)
-                if(in->c_type == C_VOID && out->c_type == C_VOID){
-                    fn->extern_fn();
-                    return lval_create_ok();
-
-                // int fn(void)
-                } else if (in->c_type == C_VOID && out->c_type == C_INT) {
-                    return lval_create_bool(fn->extern_fn());
-
-                // void fn(int)
-                } else if (in->c_type == C_INT && out->c_type == C_VOID) {
-                    fn->extern_fn(a->cell[0]->num.li);
-                    return lval_create_ok();
-
-                // void fn(Color)
-                } else if (in->c_type == C_COLOR && out->c_type == C_VOID) {
-                    Color_t c = color_from_list(a->cell[0]);
-                    fn->extern_fn(c);
-                    return lval_create_ok();
-                }
-            }
-
-            // HARDCODED: InitWindow
-            else if (n_expected == 3) {
-                fn->extern_fn(a->cell[0]->num.li, a->cell[1]->num.li, a->cell[2]->str);
-                return lval_create_ok();
-
-            // HARDCODED: DrawText
-            } else if (n_expected == 5) {
-                Lval_t* msg = a->cell[0];
-                Lval_t* x = a->cell[1];
-                Lval_t* y = a->cell[2];
-                Lval_t* sz = a->cell[3];
-                Color_t c = color_from_list(a->cell[4]);
-                fn->extern_fn(msg->str, x->num.li, y->num.li, sz->num.li, c);
-                return lval_create_ok();
-            }
-
-            return lval_create_err("UNREACHABLE");
-        } else {
-            lval_del(a);
-            return lval_create_err("Extern function expects [%i] args, got [%i].", n_expected, n_given);
-        }
-    }
-
     while (a->count) {
         if (fn->formals->count == 0) {
             lval_del(a);
             return lval_create_err(
                 // TODO: figure out how to provide the name of the function
-                "Function `user-defined` expects [%i] args, got [%i].", n_expected, n_given);
+                "Function `user-defined` expects [%i] args, got [%i].", fn->formals->count, n_given);
         }
 
         Lval_t* sym = lval_pop(fn->formals, 0);
