@@ -28,7 +28,7 @@
 ; recursive function to get the nth element
 (fn {nth n l} {
     if (== n 0)
-    {0}
+    {st l}
     {nth (- n 1) (tail l)}
 })
 
