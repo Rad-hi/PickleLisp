@@ -75,11 +75,17 @@ static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 static Lval_t* lval_create_dll(void* dll);
+static Lval_t* lval_create_color_type(void);
+static Lval_t* lval_create_str_type(void);
+static Lval_t* lval_create_double_type(void);
+static Lval_t* lval_create_int_type(void);
+static Lval_t* lval_create_void_type(void);
 
 static void    lval_expr_print(Lval_t* v, char open, char close);
 static char*   ltype_name(LVAL_e t);
 static void    lval_print_str(Lval_t* v);
 static char*   freadline(FILE* fp, size_t size);
+static Color_t color_from_list(Lval_t* l);
 
 /*
     Keep a record of all builtin names that exist in the language,
@@ -102,6 +108,13 @@ static Builtins_record_t __builtins__ = {
     .count = 0
 };
 
+static char* TYPE_NAME_LUT[N_TYPES] = {
+    "C_VOID",
+    "C_INT",
+    "C_DOUBLE",
+    "C_STRING",
+    "C_COLOR",
+};
 
 /*
   Recursively constructs the list of values (lval)
@@ -150,6 +163,7 @@ void lval_del(Lval_t* v) {
         case LVAL_OK:
         case LVAL_EXIT:
         case LVAL_BOOL:
+        case LVAL_TYPE:
         case LVAL_INTEGER:
         case LVAL_DECIMAL: break;
 
@@ -186,6 +200,7 @@ void lval_print(Lval_t* v) {
         case LVAL_QEXPR:   lval_expr_print(v, '{', '}'); break;
         case LVAL_EXIT:    printf("Exiting"); break;
         case LVAL_DLL:     printf("Dynamic library"); break;
+        case LVAL_TYPE:    printf("%s", TYPE_NAME_LUT[v->c_type]); break;
         case LVAL_OK:      break;
         case LVAL_FN: {
             if (v->builtin != NULL) {
@@ -275,6 +290,13 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin_const(e, "true",  lval_create_bool(true));
     lenv_add_builtin_const(e, "false", lval_create_bool(false));
     lenv_add_builtin_const(e, "exit",  lval_create_exit());
+
+    /* types */
+    lenv_add_builtin_const(e, "Void",   lval_create_void_type());
+    lenv_add_builtin_const(e, "Int",    lval_create_int_type());
+    lenv_add_builtin_const(e, "Double", lval_create_double_type());
+    lenv_add_builtin_const(e, "String", lval_create_str_type());
+    lenv_add_builtin_const(e, "Color",  lval_create_color_type());
 }
 
 /*
@@ -330,7 +352,6 @@ Lval_t* lval_add(Lval_t* v, Lval_t* x) {
     v->cell[v->count - 1] = x;
     return v;
 }
-
 
 Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM(__func__, a, 1);
@@ -447,6 +468,41 @@ static Lval_t* lval_create_ok(void) {
     return v;
 }
 
+static Lval_t* lval_create_void_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_VOID;
+    return v;
+}
+
+static Lval_t* lval_create_int_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_INT;
+    return v;
+}
+
+static Lval_t* lval_create_double_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_DOUBLE;
+    return v;
+}
+
+static Lval_t* lval_create_str_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_STRING;
+    return v;
+}
+
+static Lval_t* lval_create_color_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_COLOR;
+    return v;
+}
+
 static Lval_t* lval_create_exit(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_EXIT;
@@ -511,13 +567,14 @@ static Lval_t* lval_read_str(mpc_ast_t* ast) {
     return str;
 }
 
-
-typedef struct ColorStruct {
-    char r;
-    char g;
-    char b;
-    char a;
-} ColorStruct;
+static Color_t color_from_list(Lval_t* l) {
+    return (Color_t){
+        (char)l->cell[0]->num.li,
+        (char)l->cell[1]->num.li,
+        (char)l->cell[2]->num.li,
+        (char)l->cell[3]->num.li,
+    };
+}
 
 /*
     Dispatches function calls based on whether it's a builtin or a user-defined one
@@ -525,44 +582,73 @@ typedef struct ColorStruct {
 static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
     if (fn->builtin != NULL) return fn->builtin(e, a);
 
-    if (fn->is_extern && fn->extern_fn != NULL) {
-        // TODO: use the fn mechanism, or new one to get input into the functions
-        switch (fn->formals->count) {
-            case 1:
-                // HARDCODED All the `void func(void)`
-                fn->extern_fn();
-            break;
-            case 2:
-                // HARDCODED SetTargetFPS
-                fn->extern_fn(30);
-            break;
-            case 3:
-                // HARDCODED InitWindow
-                fn->extern_fn(960, 540, "Test title");
-            break;
-            case 4:
-                // TODO: some functions can return values, get them
-                return lval_create_bool(fn->extern_fn());
-            break;
-            case 5:
-                // HARDCODED DrawText
-                fn->extern_fn("Hello, from PickleLisp",
-                              (960 - 220) / 2, 200, 20,
-                              (ColorStruct){189, 88, 110, 255});
-            break;
-        }
-        return lval_create_ok();
-    }
+    int n_given = a->count;
+    int n_expected = fn->formals->count;
 
-    int given = a->count;
-    int total = fn->formals->count;
+    if (fn->is_extern && fn->extern_fn != NULL) {
+        // TODO: check against provided types, and expected ones
+        if (n_given == n_expected) {
+
+            int n_ret = fn->body->count;
+            if (n_expected == 1 && n_ret == 1) {
+                // I am using the fn mechanism to do external fucntions, which takes in
+                // types, not symbols, so I need to save types as symbols, and extract
+                // the type in here .. TODD: fix this with extern functions' own mechanism
+                // (or whatever makes sense after some reading)
+                Lval_t* in = lenv_get(e, fn->formals->cell[0]);
+                Lval_t* out = lenv_get(e, fn->body->cell[0]);
+
+                // void fn(void)
+                if(in->c_type == C_VOID && out->c_type == C_VOID){
+                    fn->extern_fn();
+                    return lval_create_ok();
+
+                // int fn(void)
+                } else if (in->c_type == C_VOID && out->c_type == C_INT) {
+                    return lval_create_bool(fn->extern_fn());
+
+                // void fn(int)
+                } else if (in->c_type == C_INT && out->c_type == C_VOID) {
+                    fn->extern_fn(a->cell[0]->num.li);
+                    return lval_create_ok();
+
+                // void fn(Color)
+                } else if (in->c_type == C_COLOR && out->c_type == C_VOID) {
+                    Color_t c = color_from_list(a->cell[0]);
+                    fn->extern_fn(c);
+                    return lval_create_ok();
+                }
+            }
+
+            // HARDCODED: InitWindow
+            else if (n_expected == 3) {
+                fn->extern_fn(a->cell[0]->num.li, a->cell[1]->num.li, a->cell[2]->str);
+                return lval_create_ok();
+
+            // HARDCODED: DrawText
+            } else if (n_expected == 5) {
+                Lval_t* msg = a->cell[0];
+                Lval_t* x = a->cell[1];
+                Lval_t* y = a->cell[2];
+                Lval_t* sz = a->cell[3];
+                Color_t c = color_from_list(a->cell[4]);
+                fn->extern_fn(msg->str, x->num.li, y->num.li, sz->num.li, c);
+                return lval_create_ok();
+            }
+
+            return lval_create_err("UNREACHABLE");
+        } else {
+            lval_del(a);
+            return lval_create_err("Extern function expects [%i] args, got [%i].", n_expected, n_given);
+        }
+    }
 
     while (a->count) {
         if (fn->formals->count == 0) {
             lval_del(a);
             return lval_create_err(
                 // TODO: figure out how to provide the name of the function
-                "Function `user-defined` expects [%i] args, got [%i].", total, given);
+                "Function `user-defined` expects [%i] args, got [%i].", n_expected, n_given);
         }
 
         Lval_t* sym = lval_pop(fn->formals, 0);
@@ -622,7 +708,6 @@ static void lval_expr_print(Lval_t* v, char open, char close) {
     }
     putchar(close);
 }
-
 
 static Lval_t* lval_pop(Lval_t* v, int i) {
     assert(i < v->count && "Index provided to `pop` is out of bound");
@@ -897,6 +982,9 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
             return 1;
         }
 
+        case LVAL_DLL:  return x->dll == y->dll;
+        case LVAL_TYPE: return x->c_type == y->c_type;
+
         case LVAL_EXIT: return 1;
         case LVAL_OK: return 1;
         default:
@@ -1154,10 +1242,11 @@ static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
 static Lval_t* lval_copy(Lval_t* v) {
     Lval_t* x = malloc(sizeof(Lval_t));
     x->type = v->type;
-    x->is_extern = v->is_extern;
 
     switch (v->type) {
         case LVAL_FN: {
+            x->is_extern = v->is_extern;
+
             if (v->builtin != NULL) {
                 x->builtin = v->builtin;
             } else {
@@ -1170,15 +1259,12 @@ static Lval_t* lval_copy(Lval_t* v) {
             break;
         }
 
-        case LVAL_DLL:
-            x->dll = v->dll; break;
-
-        case LVAL_DECIMAL:
-            x->num.f = v->num.f; break;
+        case LVAL_DLL:       x->dll = v->dll; break;
+        case LVAL_TYPE:      x->c_type = v->c_type; break;
+        case LVAL_DECIMAL:   x->num.f = v->num.f; break;
 
         case LVAL_BOOL:
-        case LVAL_INTEGER:
-            x->num.li = v->num.li; break;
+        case LVAL_INTEGER:   x->num.li = v->num.li; break;
 
         case LVAL_STR: {
             x->str = malloc(strlen(v->str) + 1);
@@ -1218,7 +1304,6 @@ static Lval_t* lval_copy(Lval_t* v) {
 
 static void lenv_add_builtin_const(Lenv_t* e, char* name, Lval_t* val) {
     lenv_def(e, lval_create_sym(name), val);
-
 }
 
 static void lenv_add_builtin(Lenv_t* e, char* name, Lbuiltin_t fn) {
@@ -1320,6 +1405,7 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_EXIT:     return "Exit";
         case LVAL_OK:       return "OK";
         case LVAL_DLL:      return "DLL";
+        case LVAL_TYPE:     return "C_Type";
         default:
             fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
             assert(false);
@@ -1426,6 +1512,7 @@ static Lval_t* builtin_type(Lenv_t* e, Lval_t* a) {
         case LVAL_SEXPR:
         case LVAL_QEXPR:
         case LVAL_DLL:
+        case LVAL_TYPE:
             return lval_create_str(ltype_name(val->type));
 
         case LVAL_SYM:
@@ -1470,38 +1557,46 @@ static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a) {
 
 
 static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM(__func__, a, 3);
+    LASSERT_NUM(__func__, a, 4);
     LASSERT_TYPE(__func__, a, 0, LVAL_DLL);
     LASSERT_TYPE(__func__, a, 1, LVAL_STR);
     LASSERT_TYPE(__func__, a, 2, LVAL_QEXPR);
-    // TODO: expect an output type, that's part of C-Types (or something like this)
-
-    // TODO: make ctypes and add the check for them
-    // Lval_t* symbols = a->cell[2];
-    // /* Q-expr must only contain c-types */
-    // for (int i = 0; i < symbols->count; ++i) {
-    //     LASSERT(a, (symbols->cell[i]->type == LVAL_SYM),
-    //         "Function `%s` cannot define arg [%i] of type [%s], expected [%s]",
-    //         __func__, i + 1, ltype_name(symbols->cell[i]->type), ltype_name(LVAL_SYM));
-    // }
+    LASSERT_TYPE(__func__, a, 3, LVAL_QEXPR);
 
     void* dll = a->cell[0]->dll;
-    char* fn_name = a->cell[1]->str;
+    Lval_t* fn_name = lval_pop(a, 1);
+    Lval_t* inputs = lval_pop(a, 1);
+    Lval_t* outputs = lval_pop(a, 1);
+
+    for (int i = 0; i < inputs->count; ++i) {
+        Lval_t* val = lenv_get(e, inputs->cell[i]);
+        LASSERT(a, (val->type == LVAL_TYPE),
+            "Extern def of func `%s` got input arg [%i] of type [%s], expected [%s]",
+            fn_name->str, i + 1, ltype_name(inputs->cell[i]->type), ltype_name(LVAL_TYPE));
+    }
+
+    LASSERT(a, (outputs->count <= 1), "Extern def of func `%s` got [%i] output args, "
+                                      "only 0 or 1 is supported at the time", fn_name->str, outputs->count);
+
+    for (int i = 0; i < outputs->count; ++i) {
+        Lval_t* val = lenv_get(e, outputs->cell[i]);
+        LASSERT(a, (val->type == LVAL_TYPE),
+            "Extern def of func `%s` got output arg [%i] of type [%s], expected [%s]",
+            fn_name->str, i + 1, ltype_name(outputs->cell[i]->type), ltype_name(LVAL_TYPE));
+    }
 
     Generic_fn_ptr_t ptr;
-    *(void **) (&ptr) = dlsym(dll, fn_name);
+    *(void **) (&ptr) = dlsym(dll, fn_name->str);
     char* error = dlerror();
     if (error != NULL) {
-        return lval_create_err("[%s] -- Couldn't load symbol %s from DLL. ERROR: %s", __func__, fn_name, dlerror());
+        return lval_create_err("[%s] -- Couldn't load symbol %s from DLL. ERROR: %s", __func__, fn_name->str, dlerror());
     }
     dlerror();
 
-    Lval_t* formals = lval_pop(a, 2);
-    Lval_t* fn = lval_create_lambda(formals, lval_create_sexpr());
+    Lval_t* fn = lval_create_lambda(inputs, outputs);
     fn->extern_fn = ptr;
     fn->is_extern = true;
-    lenv_def(e, a->cell[1], fn);
-    // lval_del(a);
+    lenv_def(e, fn_name, fn);
 
     return lval_create_ok();
 }

@@ -48,7 +48,21 @@ typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
 // these might not return anything, but the `int` return type
 // is for the compiler to shut up about return type
 typedef int (*Generic_fn_ptr_t) ();
+typedef struct {
+    char r;
+    char g;
+    char b;
+    char a;
+} Color_t;
 
+typedef enum {
+    C_VOID,
+    C_INT,
+    C_DOUBLE,
+    C_STRING,
+    C_COLOR,
+    N_TYPES,
+} CTypes_e;
 
 typedef enum {
     LVAL_INTEGER,
@@ -61,6 +75,7 @@ typedef enum {
     LVAL_SEXPR,
     LVAL_QEXPR,
     LVAL_DLL,
+    LVAL_TYPE,
     LVAL_EXIT,
     LVAL_OK,
 } LVAL_e;
@@ -80,6 +95,7 @@ struct Lenv_t {
 
 struct Lval_t {
     LVAL_e type;
+    CTypes_e c_type;
 
     /* Lval_t can only represent one at a time */
     union {
