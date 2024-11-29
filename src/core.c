@@ -108,6 +108,7 @@ static Builtins_record_t __builtins__ = {
     .count = 0
 };
 
+// NOTE: keep the same order as the definition
 static char* TYPE_NAME_LUT[N_TYPES] = {
     "C_VOID",
     "C_INT",
@@ -576,65 +577,115 @@ static Color_t color_from_list(Lval_t* l) {
     };
 }
 
-static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
-    int n_given = inputs->count;
-    int n_expected = fn->formals->count;
 
-    // TODO: check against provided types, and expected ones
-    if (n_given == n_expected) {
+static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
+    switch (input->type) {
+        case LVAL_BOOL:
+        case LVAL_INTEGER: {
+            *ret = C_INT;
+            return true;
+        }
 
-        int n_ret = fn->body->count;
-        if (n_expected == 1 && n_ret == 1) {
-            // I am using the fn mechanism to do external fucntions, which takes in
-            // types, not symbols, so I need to save types as symbols, and extract
-            // the type in here .. TODD: fix this with extern functions' own mechanism
-            // (or whatever makes sense after some reading)
-            Lval_t* in = lenv_get(e, fn->formals->cell[0]);
-            Lval_t* out = lenv_get(e, fn->body->cell[0]);
+        case LVAL_DECIMAL: {
+            * ret = C_DOUBLE;
+            return true;
+        }
 
-            // void fn(void)
-            if(in->c_type == C_VOID && out->c_type == C_VOID){
-                fn->extern_fn();
-                return lval_create_ok();
+        case LVAL_STR: {
+            * ret = C_STRING;
+            return true;
+        }
 
-            // int fn(void)
-            } else if (in->c_type == C_VOID && out->c_type == C_INT) {
-                return lval_create_bool(fn->extern_fn());
-
-            // void fn(int)
-            } else if (in->c_type == C_INT && out->c_type == C_VOID) {
-                fn->extern_fn(inputs->cell[0]->num.li);
-                return lval_create_ok();
-
-            // void fn(Color)
-            } else if (in->c_type == C_COLOR && out->c_type == C_VOID) {
-                Color_t c = color_from_list(inputs->cell[0]);
-                fn->extern_fn(c);
-                return lval_create_ok();
+        case LVAL_QEXPR: {
+            if (input->count == 0) {
+                * ret = C_VOID;
+                return true;
+            } else if (input->count == 4) {
+                * ret = C_COLOR;
+                return true;
             }
         }
 
-        // HARDCODED: InitWindow
-        else if (n_expected == 3) {
-            fn->extern_fn(inputs->cell[0]->num.li, inputs->cell[1]->num.li, inputs->cell[2]->str);
-            return lval_create_ok();
-
-        // HARDCODED: DrawText
-        } else if (n_expected == 5) {
-            Lval_t* msg = inputs->cell[0];
-            Lval_t* x = inputs->cell[1];
-            Lval_t* y = inputs->cell[2];
-            Lval_t* sz = inputs->cell[3];
-            Color_t c = color_from_list(inputs->cell[4]);
-            fn->extern_fn(msg->str, x->num.li, y->num.li, sz->num.li, c);
-            return lval_create_ok();
+        case LVAL_SEXPR: {
+            if (input->count == 0) {
+                * ret = C_VOID;
+                return true;
+            } else {
+                return false;
+            }
         }
 
-        return lval_create_err("UNREACHABLE");
-    } else {
-        lval_del(inputs);
-        return lval_create_err("Extern function expects [%i] args, got [%i].", n_expected, n_given);
+        default: return false;
     }
+
+    return false;
+}
+
+
+static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
+    int n_given = inputs->count;
+    int n_expct = fn->formals->count;
+
+    if (n_given != n_expct) {
+        lval_del(inputs);
+        return lval_create_err("Extern function expects [%i] args, got [%i].", n_expct, n_given);
+    }
+
+    for (int i = 0; i < n_given; ++i) {
+        CTypes_e ctype;
+        bool ret = lval_type_2_ctype(inputs->cell[i], &ctype);
+        Lval_t* arg_type = lenv_get(e, fn->formals->cell[i]);
+        LASSERT(inputs, (ret && arg_type->c_type == ctype),
+                "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
+                __func__, i + 1, TYPE_NAME_LUT[ctype], TYPE_NAME_LUT[arg_type->c_type]);
+    }
+
+    int n_ret = fn->body->count;
+    if (n_expct == 1 && n_ret == 1) {
+        Lval_t* in = lenv_get(e, fn->formals->cell[0]);
+        Lval_t* out = lenv_get(e, fn->body->cell[0]);
+
+        // void fn(void)
+        if(in->c_type == C_VOID && out->c_type == C_VOID){
+            fn->extern_fn();
+            return lval_create_ok();
+
+        // int fn(void)
+        } else if (in->c_type == C_VOID && out->c_type == C_INT) {
+            return lval_create_bool(fn->extern_fn());
+
+        // void fn(int)
+        } else if (in->c_type == C_INT && out->c_type == C_VOID) {
+            fn->extern_fn(inputs->cell[0]->num.li);
+            return lval_create_ok();
+
+        // void fn(Color)
+        } else if (in->c_type == C_COLOR && out->c_type == C_VOID) {
+            Color_t c = color_from_list(inputs->cell[0]);
+            fn->extern_fn(c);
+            return lval_create_ok();
+        }
+    }
+
+    // HARDCODED: InitWindow
+    else if (n_expct == 3) {
+        fn->extern_fn(inputs->cell[0]->num.li, inputs->cell[1]->num.li, inputs->cell[2]->str);
+        return lval_create_ok();
+
+    // HARDCODED: DrawText
+    } else if (n_expct == 5) {
+        Lval_t* msg = inputs->cell[0];
+        Lval_t* x = inputs->cell[1];
+        Lval_t* y = inputs->cell[2];
+        Lval_t* sz = inputs->cell[3];
+        Color_t c = color_from_list(inputs->cell[4]);
+        fn->extern_fn(msg->str, x->num.li, y->num.li, sz->num.li, c);
+        return lval_create_ok();
+    }
+
+    return lval_create_err("UNREACHABLE");
+
+
 }
 
 /*
