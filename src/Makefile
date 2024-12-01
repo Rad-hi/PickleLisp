@@ -9,9 +9,9 @@
 CC = cc
 
 CFLAGS = -Wall -g
-LFLAGS = -ledit -lm -ldl
+LFLAGS = -ledit -lm -ldl -lffi
 
-INCLUDES = -I../mpc
+INCLUDES = -I../mpc -I../libffi-3.4.6/include/
 SRCS = pickle_lisp.c ../mpc/mpc.c core.c lang.c
 
 # define the C object files 

@@ -425,7 +425,8 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
     v->env = lenv_new();
     v->formals = formals;
     v->body = body;
-    v->extern_fn = NULL;
+    v->cif = malloc(sizeof(ffi_cif));
+    v->extern_fn = malloc(sizeof(void*));
     v->is_extern = false;
     return v;
 }
@@ -587,28 +588,28 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
         }
 
         case LVAL_DECIMAL: {
-            * ret = C_DOUBLE;
+            *ret = C_DOUBLE;
             return true;
         }
 
         case LVAL_STR: {
-            * ret = C_STRING;
+            *ret = C_STRING;
             return true;
         }
 
         case LVAL_QEXPR: {
             if (input->count == 0) {
-                * ret = C_VOID;
+                *ret = C_VOID;
                 return true;
             } else if (input->count == 4) {
-                * ret = C_COLOR;
+                *ret = C_COLOR;
                 return true;
             }
         }
 
         case LVAL_SEXPR: {
             if (input->count == 0) {
-                * ret = C_VOID;
+                *ret = C_VOID;
                 return true;
             } else {
                 return false;
@@ -621,6 +622,52 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
     return false;
 }
 
+void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
+    if (inputs->count == 1 && atypes[0] == C_VOID) {
+        ffi_call(fn->cif, FFI_FN(fn->extern_fn), ret, NULL);
+        return;
+    }
+
+    void **avalues = malloc(inputs->count * sizeof(void*));
+    for (int i = 0; i < inputs->count; i++) {
+        void *val;
+
+        switch (atypes[i]) {
+            case C_VOID: {
+                fprintf(stderr, "In func %s you cannot have one of the inputs as %s!",
+                                fn->name, TYPE_NAME_LUT[atypes[i]]);
+                assert(false);
+            }
+            case C_INT: {
+                val = &inputs->cell[i]->num.li;
+                break;
+            }
+            case C_DOUBLE: {
+                val = &inputs->cell[i]->num.f;
+                break;
+            }
+            case C_STRING: {
+                val = &inputs->cell[i]->str;
+                break;
+            }
+            case C_COLOR: {
+                Color_t c = color_from_list(inputs->cell[i]);
+                val = &c;
+                break;
+            }
+            default:
+                fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
+                assert(false);
+        }
+
+        avalues[i] = val;
+    }
+
+    // printf("%d, %d, %s", *(int*)avalues[0], *(int*)avalues[1], (char*)avalues[2]);
+    ffi_call(fn->cif, FFI_FN(fn->extern_fn), ret, avalues);
+    free(avalues);
+    free(atypes);
+}
 
 static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
     int n_given = inputs->count;
@@ -631,45 +678,86 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         return lval_create_err("Extern function expects [%i] args, got [%i].", n_expct, n_given);
     }
 
+    CTypes_e *atypes = malloc(n_given * sizeof(CTypes_e));
     for (int i = 0; i < n_given; ++i) {
-        CTypes_e ctype;
-        bool ret = lval_type_2_ctype(inputs->cell[i], &ctype);
+        bool ret = lval_type_2_ctype(inputs->cell[i], &atypes[i]);
         Lval_t* arg_type = lenv_get(e, fn->formals->cell[i]);
-        LASSERT(inputs, (ret && arg_type->c_type == ctype),
-                "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
-                __func__, i + 1, TYPE_NAME_LUT[ctype], TYPE_NAME_LUT[arg_type->c_type]);
+        bool okay = ret && arg_type->c_type == atypes[i];
+        // if (!okay) free(atypes);
+        LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
+                              fn->name, i + 1, TYPE_NAME_LUT[atypes[i]], TYPE_NAME_LUT[arg_type->c_type]);
     }
+
+    Lval_t* out = lenv_get(e, fn->body->cell[0]);
+
+# if 0
+
+    switch (out->c_type) {
+        case C_VOID:{
+            ffi_call_extern(fn, atypes, inputs, NULL);
+            return lval_create_ok();
+        }
+        case C_INT:{
+            int ret;
+            ffi_call_extern(fn, atypes, inputs, &ret);
+            return lval_create_long(ret);
+        }
+        case C_DOUBLE:{
+            double ret;
+            ffi_call_extern(fn, atypes, inputs, &ret);
+            return lval_create_double(ret);
+        }
+        case C_STRING:{
+            char *ret;
+            ffi_call_extern(fn, atypes, inputs, &ret);
+            return lval_create_str(ret);
+        }
+        case C_COLOR:{
+            Color_t *ret;
+            ffi_call_extern(fn, atypes, inputs, &ret);
+            Lval_t* l = lval_create_qexpr();
+            lval_add(l, lval_create_long(ret->r));
+            lval_add(l, lval_create_long(ret->g));
+            lval_add(l, lval_create_long(ret->b));
+            lval_add(l, lval_create_long(ret->a));
+            return l;
+        }
+        default:
+            fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
+            assert(false);
+    }
+
+# else
 
     int n_ret = fn->body->count;
     if (n_expct == 1 && n_ret == 1) {
         Lval_t* in = lenv_get(e, fn->formals->cell[0]);
-        Lval_t* out = lenv_get(e, fn->body->cell[0]);
 
         // void fn(void)
         if(in->c_type == C_VOID && out->c_type == C_VOID){
-            fn->extern_fn();
+            ((void (*)(void))(fn->extern_fn))();
             return lval_create_ok();
 
         // int fn(void)
         } else if (in->c_type == C_VOID && out->c_type == C_INT) {
-            return lval_create_bool(fn->extern_fn());
+            return lval_create_bool(((int (*)(void))(fn->extern_fn))());
 
         // void fn(int)
         } else if (in->c_type == C_INT && out->c_type == C_VOID) {
-            fn->extern_fn(inputs->cell[0]->num.li);
+            ((void (*)(int))(fn->extern_fn))(inputs->cell[0]->num.li);
             return lval_create_ok();
 
         // void fn(Color)
         } else if (in->c_type == C_COLOR && out->c_type == C_VOID) {
             Color_t c = color_from_list(inputs->cell[0]);
-            fn->extern_fn(c);
+            ((void (*)(Color_t))(fn->extern_fn))(c);
             return lval_create_ok();
         }
     }
 
     // HARDCODED: InitWindow
     else if (n_expct == 3) {
-        fn->extern_fn(inputs->cell[0]->num.li, inputs->cell[1]->num.li, inputs->cell[2]->str);
+        ((void (*) (int, int, char*))(fn->extern_fn))(inputs->cell[0]->num.li, inputs->cell[1]->num.li, inputs->cell[2]->str);
         return lval_create_ok();
 
     // HARDCODED: DrawText
@@ -679,13 +767,13 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         Lval_t* y = inputs->cell[2];
         Lval_t* sz = inputs->cell[3];
         Color_t c = color_from_list(inputs->cell[4]);
-        fn->extern_fn(msg->str, x->num.li, y->num.li, sz->num.li, c);
+        ((void (*)(char*, int, int, int, Color_t))(fn->extern_fn))(msg->str, x->num.li, y->num.li, sz->num.li, c);
         return lval_create_ok();
     }
 
+# endif
+
     return lval_create_err("UNREACHABLE");
-
-
 }
 
 /*
@@ -693,7 +781,7 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
 */
 static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
     if (fn->builtin != NULL) return fn->builtin(e, a);
-    if (fn->is_extern && fn->extern_fn != NULL) return lval_call_extern(e, fn, a);
+    if (fn->is_extern) return lval_call_extern(e, fn, a);
 
     int n_given = a->count;
     while (a->count) {
@@ -1608,6 +1696,39 @@ static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a) {
     return lval_create_ok();
 }
 
+ffi_type ctype_2_ffi_type(CTypes_e c_type) {
+    switch (c_type) {
+        case C_VOID: {
+            return ffi_type_void;
+        }
+        case C_INT: {
+            return ffi_type_sint;
+        }
+        case C_DOUBLE: {
+            return ffi_type_double;
+        }
+        case C_STRING: {
+            return ffi_type_pointer;
+        }
+        case C_COLOR: {
+            // Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
+            ffi_type* color_elements[] = {&ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, NULL};
+            ffi_type color_type = {.size=0, .alignment=0, .type=FFI_TYPE_STRUCT, .elements=color_elements};
+            return color_type;
+        }
+        default:
+            fprintf(stderr, "You're asking for an FFI equivalent to a ctype that's not handled %s!", __func__);
+            assert(false);
+    }
+}
+
+static void ctypes_2_ffi_type(Lval_t** v, ffi_type* atypes[], int ntypes) {
+    atypes = malloc(ntypes * sizeof(ffi_type*));
+    for (int i = 0; i < ntypes; ++i) {
+        ffi_type t = ctype_2_ffi_type(v[i]->c_type);
+        atypes[i] = &t;
+    }
+}
 
 static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM(__func__, a, 4);
@@ -1621,25 +1742,28 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     Lval_t* inputs = lval_pop(a, 1);
     Lval_t* outputs = lval_pop(a, 1);
 
+    Lval_t** input_types = malloc(sizeof(Lval_t*) * inputs->count);
     for (int i = 0; i < inputs->count; ++i) {
-        Lval_t* val = lenv_get(e, inputs->cell[i]);
-        LASSERT(a, (val->type == LVAL_TYPE),
-            "Extern def of func `%s` got input arg [%i] of type [%s], expected [%s]",
-            fn_name->str, i + 1, ltype_name(inputs->cell[i]->type), ltype_name(LVAL_TYPE));
+        input_types[i] = lenv_get(e, inputs->cell[i]);
+        bool okay = input_types[i]->type == LVAL_TYPE;
+        if (!okay) free(input_types);
+        LASSERT(a, okay, "Extern def of func `%s` got input arg [%i] of type [%s], expected [%s]",
+                         fn_name->str, i + 1, ltype_name(inputs->cell[i]->type), ltype_name(LVAL_TYPE));
     }
 
     LASSERT(a, (outputs->count <= 1), "Extern def of func `%s` got [%i] output args, "
-                                      "only 0 or 1 is supported at the time", fn_name->str, outputs->count);
+                                      "only 1 is supported at the time", fn_name->str, outputs->count);
 
+    Lval_t** output_types = malloc(sizeof(Lval_t*) * inputs->count);
     for (int i = 0; i < outputs->count; ++i) {
-        Lval_t* val = lenv_get(e, outputs->cell[i]);
-        LASSERT(a, (val->type == LVAL_TYPE),
-            "Extern def of func `%s` got output arg [%i] of type [%s], expected [%s]",
-            fn_name->str, i + 1, ltype_name(outputs->cell[i]->type), ltype_name(LVAL_TYPE));
+        output_types[i] = lenv_get(e, outputs->cell[i]);
+        bool okay = output_types[i]->type == LVAL_TYPE;
+        if (!okay) free(output_types);
+        LASSERT(a, okay, "Extern def of func `%s` got output arg [%i] of type [%s], expected [%s]",
+                         fn_name->str, i + 1, ltype_name(outputs->cell[i]->type), ltype_name(LVAL_TYPE));
     }
 
-    Generic_fn_ptr_t ptr;
-    *(void **) (&ptr) = dlsym(dll, fn_name->str);
+    void* ptr = dlsym(dll, fn_name->str);
     char* error = dlerror();
     if (error != NULL) {
         return lval_create_err("[%s] -- Couldn't load symbol %s from DLL. ERROR: %s", __func__, fn_name->str, dlerror());
@@ -1647,9 +1771,24 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     dlerror();
 
     Lval_t* fn = lval_create_lambda(inputs, outputs);
+
+    ffi_type* atypes[inputs->count];
+    ctypes_2_ffi_type(input_types, atypes, inputs->count);    
+    ffi_type rtype = ctype_2_ffi_type(output_types[0]->c_type);
+    ffi_status status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, 0, &rtype, atypes);
+    if (status != FFI_OK) {
+        // TODO: return lval error instead of panicking
+        fprintf(stderr, "ffi_prep_cif failed: %d\n", status);
+        exit(1);
+    }
+
     fn->extern_fn = ptr;
     fn->is_extern = true;
+    fn->name = fn_name->str;
     lenv_def(e, fn_name, fn);
+
+    free(input_types);
+    free(output_types);
 
     return lval_create_ok();
 }

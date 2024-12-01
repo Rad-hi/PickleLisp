@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <dlfcn.h>
+#include <ffi.h>
 
 #include "config.h"
 #include "mpc.h"
@@ -44,10 +45,6 @@ typedef struct Lenv_t Lenv_t;
 
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
 
-// Ref: https://stackoverflow.com/a/1354669
-// these might not return anything, but the `int` return type
-// is for the compiler to shut up about return type
-typedef int (*Generic_fn_ptr_t) ();
 typedef struct {
     char r;
     char g;
@@ -95,6 +92,7 @@ struct Lenv_t {
 };
 
 struct Lval_t {
+    char* name;
     LVAL_e type;
     CTypes_e c_type;
 
@@ -114,7 +112,8 @@ struct Lval_t {
     Lval_t* body;  // used to contain the function's body (fn), and return type (extern)
 
     bool is_extern;
-    Generic_fn_ptr_t extern_fn;
+    void *extern_fn;
+    ffi_cif* cif;
 
     /* Expression */
     int count;
