@@ -117,6 +117,10 @@ static char* TYPE_NAME_LUT[N_TYPES] = {
     "C_COLOR",
 };
 
+// Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
+ffi_type* color_elements[] = {&ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, NULL};
+ffi_type ffi_color_type = {.size=0, .alignment=0, .type=FFI_TYPE_STRUCT, .elements=color_elements};
+
 /*
   Recursively constructs the list of values (lval)
   based on theirs tags which are defined in lang.h
@@ -425,8 +429,7 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
     v->env = lenv_new();
     v->formals = formals;
     v->body = body;
-    v->cif = malloc(sizeof(ffi_cif));
-    v->extern_fn = malloc(sizeof(void*));
+    v->extern_fn = NULL;
     v->is_extern = false;
     return v;
 }
@@ -623,14 +626,15 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
 }
 
 void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
+    // NOTE: shouldn't pass void as input, but in PickleLisp, void is how we indicate
+    // to the language that we take no inputs
     if (inputs->count == 1 && atypes[0] == C_VOID) {
-        ffi_call(fn->cif, FFI_FN(fn->extern_fn), ret, NULL);
+        ffi_call(&fn->cif, FFI_FN(fn->extern_fn), ret, NULL);
         return;
     }
 
-    void **avalues = malloc(inputs->count * sizeof(void*));
+    void *avalues[inputs->count];
     for (int i = 0; i < inputs->count; i++) {
-        void *val;
 
         switch (atypes[i]) {
             case C_VOID: {
@@ -639,33 +643,30 @@ void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
                 assert(false);
             }
             case C_INT: {
-                val = &inputs->cell[i]->num.li;
+                avalues[i] = &inputs->cell[i]->num.li;
                 break;
             }
             case C_DOUBLE: {
-                val = &inputs->cell[i]->num.f;
+                avalues[i] = &inputs->cell[i]->num.f;
                 break;
             }
             case C_STRING: {
-                val = &inputs->cell[i]->str;
+                avalues[i] = &inputs->cell[i]->str;
                 break;
             }
             case C_COLOR: {
                 Color_t c = color_from_list(inputs->cell[i]);
-                val = &c;
+                avalues[i] = &c;
                 break;
             }
             default:
                 fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
                 assert(false);
         }
-
-        avalues[i] = val;
     }
 
-    // printf("%d, %d, %s", *(int*)avalues[0], *(int*)avalues[1], (char*)avalues[2]);
-    ffi_call(fn->cif, FFI_FN(fn->extern_fn), ret, avalues);
-    free(avalues);
+    // printf("%d, %d, %s\n", *(int*)avalues[0], *(int*)avalues[1], (char*)avalues[2]);
+    ffi_call(&fn->cif, FFI_FN(fn->extern_fn), ret, avalues);
     free(atypes);
 }
 
@@ -683,14 +684,14 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         bool ret = lval_type_2_ctype(inputs->cell[i], &atypes[i]);
         Lval_t* arg_type = lenv_get(e, fn->formals->cell[i]);
         bool okay = ret && arg_type->c_type == atypes[i];
-        // if (!okay) free(atypes);
+        if (!okay) free(atypes);
         LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
                               fn->name, i + 1, TYPE_NAME_LUT[atypes[i]], TYPE_NAME_LUT[arg_type->c_type]);
     }
 
     Lval_t* out = lenv_get(e, fn->body->cell[0]);
 
-# if 0
+#if 0
 
     switch (out->c_type) {
         case C_VOID:{
@@ -727,7 +728,7 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
             assert(false);
     }
 
-# else
+#else
 
     int n_ret = fn->body->count;
     if (n_expct == 1 && n_ret == 1) {
@@ -771,7 +772,7 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         return lval_create_ok();
     }
 
-# endif
+#endif
 
     return lval_create_err("UNREACHABLE");
 }
@@ -1392,6 +1393,7 @@ static Lval_t* lval_copy(Lval_t* v) {
                 x->builtin = v->builtin;
             } else {
                 x->builtin = NULL;
+                x->cif = v->cif;
                 x->extern_fn = v->extern_fn;
                 x->env = lenv_copy(v->env);
                 x->formals = lval_copy(v->formals);
@@ -1696,38 +1698,26 @@ static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a) {
     return lval_create_ok();
 }
 
-ffi_type ctype_2_ffi_type(CTypes_e c_type) {
+ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
     switch (c_type) {
-        case C_VOID: {
-            return ffi_type_void;
-        }
-        case C_INT: {
-            return ffi_type_sint;
-        }
-        case C_DOUBLE: {
-            return ffi_type_double;
-        }
-        case C_STRING: {
-            return ffi_type_pointer;
-        }
-        case C_COLOR: {
-            // Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
-            ffi_type* color_elements[] = {&ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, NULL};
-            ffi_type color_type = {.size=0, .alignment=0, .type=FFI_TYPE_STRUCT, .elements=color_elements};
-            return color_type;
-        }
+        case C_VOID:   return &ffi_type_void;
+        case C_INT:    return &ffi_type_slong;
+        case C_DOUBLE: return &ffi_type_double;
+        case C_STRING: return &ffi_type_pointer;
+        case C_COLOR:  return &ffi_color_type;
         default:
             fprintf(stderr, "You're asking for an FFI equivalent to a ctype that's not handled %s!", __func__);
             assert(false);
     }
 }
 
-static void ctypes_2_ffi_type(Lval_t** v, ffi_type* atypes[], int ntypes) {
-    atypes = malloc(ntypes * sizeof(ffi_type*));
-    for (int i = 0; i < ntypes; ++i) {
-        ffi_type t = ctype_2_ffi_type(v[i]->c_type);
-        atypes[i] = &t;
-    }
+char* ffi_type_2_str(ffi_type* t) {
+    if (t == &ffi_type_void) return "ffi_type_void";
+    if (t == &ffi_type_slong) return "ffi_type_slong";
+    if (t == &ffi_type_double) return "ffi_type_double";
+    if (t == &ffi_type_pointer) return "ffi_type_pointer";
+    if (t == &ffi_color_type) return "ffi_color_type";
+    return "unknown";
 }
 
 static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
@@ -1771,11 +1761,25 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     dlerror();
 
     Lval_t* fn = lval_create_lambda(inputs, outputs);
+    ffi_type* rtype = ctype_2_ffi_type(output_types[0]->c_type);
+    ffi_status status;
+    int n_args = inputs->count;
 
-    ffi_type* atypes[inputs->count];
-    ctypes_2_ffi_type(input_types, atypes, inputs->count);    
-    ffi_type rtype = ctype_2_ffi_type(output_types[0]->c_type);
-    ffi_status status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, 0, &rtype, atypes);
+    if (n_args == 1 && input_types[0]->c_type == C_VOID) {
+        // printf("%s, ", ffi_type_2_str(&ffi_type_void)); printf("\n");
+        status = ffi_prep_cif(&fn->cif, FFI_DEFAULT_ABI, 0, rtype, NULL);
+    } else {
+        ffi_type* atypes[n_args];
+        for (int i = 0; i < n_args; ++i) {
+            atypes[i] = ctype_2_ffi_type(input_types[i]->c_type);
+        }
+
+        // for (int i = 0; i < n_args; i++) {
+        //     printf("%s, ", ffi_type_2_str(atypes[i]));
+        // } printf("\n");
+
+        status = ffi_prep_cif(&fn->cif, FFI_DEFAULT_ABI, n_args, rtype, atypes);
+    }
     if (status != FFI_OK) {
         // TODO: return lval error instead of panicking
         fprintf(stderr, "ffi_prep_cif failed: %d\n", status);

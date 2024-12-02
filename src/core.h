@@ -113,7 +113,7 @@ struct Lval_t {
 
     bool is_extern;
     void *extern_fn;
-    ffi_cif* cif;
+    ffi_cif cif;
 
     /* Expression */
     int count;
