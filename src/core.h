@@ -115,6 +115,7 @@ struct Lval_t {
 
     /* libffi and extern function linking stuff (along with dll) */
     ffi_cif* cif;
+    ffi_type** atypes;
     bool is_extern;
     void* extern_ptr;
 

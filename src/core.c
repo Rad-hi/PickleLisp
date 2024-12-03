@@ -118,7 +118,7 @@ static char* TYPE_NAME_LUT[N_TYPES] = {
 };
 
 // Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
-ffi_type* color_elements[] = {&ffi_type_schar, &ffi_type_schar, &ffi_type_schar, &ffi_type_schar, NULL};
+ffi_type* color_elements[5] = {&ffi_type_schar, &ffi_type_schar, &ffi_type_schar, &ffi_type_schar, NULL};
 ffi_type ffi_color_type = {.size=0, .alignment=0, .type=FFI_TYPE_STRUCT, .elements=color_elements};
 
 /*
@@ -162,6 +162,7 @@ void lval_del(Lval_t* v) {
                 lval_del(v->formals);
                 lval_del(v->body);
                 free(v->cif);
+                free(v->atypes);
             }
             break;
         }
@@ -287,7 +288,7 @@ void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "\\",    builtin_lambda);
     lenv_add_builtin(e, "fn",    builtin_fn);
 
-    lenv_add_builtin(e, "dll", builtin_dll);
+    lenv_add_builtin(e, "dll",    builtin_dll);
     lenv_add_builtin(e, "extern", builtin_extern);
 
     /* atoms */
@@ -431,6 +432,7 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
     v->formals = formals;
     v->body = body;
     v->cif = malloc(sizeof(ffi_cif));
+    v->atypes = malloc(formals->count * sizeof(ffi_type*));
     v->extern_ptr = NULL;
     v->is_extern = false;
     return v;
@@ -624,8 +626,7 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
 }
 
 static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
-    static void *avalues[MAX_INPUT_ARGS];
-
+    void *avalues[inputs->count];
     for (int i = 0; i < inputs->count; i++) {
         switch (atypes[i]) {
             case C_VOID: {
@@ -1336,6 +1337,8 @@ static Lval_t* lval_copy(Lval_t* v) {
                 x->builtin = NULL;
                 x->cif = malloc(sizeof(ffi_cif));
                 memcpy(x->cif, v->cif, sizeof(ffi_cif));
+                x->atypes = malloc(v->formals->count * sizeof(ffi_type*));
+                memcpy(x->atypes, v->atypes, v->formals->count * sizeof(ffi_type*));
                 x->extern_ptr = v->extern_ptr;
                 x->env = lenv_copy(v->env);
                 x->formals = lval_copy(v->formals);
@@ -1709,9 +1712,8 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     if (n_args == 1 && input_types[0]->c_type == C_VOID) {
         status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, 0, rtype, NULL);
     } else {
-        static ffi_type* atypes[MAX_INPUT_ARGS];
         for (int i = 0; i < n_args; ++i) {
-            atypes[i] = ctype_2_ffi_type(input_types[i]->c_type);
+            fn->atypes[i] = ctype_2_ffi_type(input_types[i]->c_type);
         }
 # if 0  /*print the argument types*/
         printf("[%s] \nATYPES: ", fn_name->str);
@@ -1720,7 +1722,7 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
         } printf("\n");
         printf("RTYPE: %s, ", ffi_type_2_str(rtype)); printf("\n");
 # endif
-        status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, n_args, rtype, atypes);
+        status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, n_args, rtype, fn->atypes);
     }
     if (status != FFI_OK) {
         // TODO: return lval error instead of panicking
