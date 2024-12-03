@@ -2,12 +2,13 @@
 
 (extern raylib "InitWindow" {Int Int String} {Void})
 (extern raylib "WindowShouldClose" {Void} {Int})
+;; (extern raylib "DrawPixel" {Int Int Color} {Void})
 (extern raylib "BeginDrawing" {Void} {Void})
 (extern raylib "EndDrawing" {Void} {Void})
 (extern raylib "CloseWindow" {Void} {Void})
-(extern raylib "DrawText" {String Int Int Int Color} {Void})
 (extern raylib "SetTargetFPS" {Int} {Void})
 (extern raylib "ClearBackground" {Color} {Void})
+(extern raylib "DrawText" {String Int Int Int Color} {Void})
 
 ( def {ZOZINGRAY}   (list 22 22 22 255) )
 ( def {RAYWHITE}    (list 245 245 245 255) )
@@ -39,7 +40,7 @@
 
 ( fn { loop func } {
 
-    if ( == ( func {} ) true )
+    if ( == ( func {} ) 1 )
     { nil }
     {
         do
@@ -50,8 +51,9 @@
             ( def {y} (+ y dy) )
             ( if ( or (>= (+ y font_sz) win_height) (< y 0)) { do ( def {dy} (- dy) ) ( def {idx} (+ idx 1) )} { nil } )
             ( def {idx} (% idx n_cols) )
+            ;; ( DrawPixel x y (nth idx col_list) )
             ( DrawText msg x y font_sz (nth idx col_list) )
-            ;; (print (list dx dy) )
+            ;; ( print ( list dx dy) )
         ( EndDrawing {} )
         ( loop func )
     }

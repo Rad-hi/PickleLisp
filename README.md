@@ -38,4 +38,10 @@ TODO
 
 I am implementing an FFI system to interact with C libraries, and the test case is [RayLib](https://github.com/raysan5/raylib/tree/master).
 
-TODO: Use [libffi](https://github.com/libffi/libffi) to do all calls.
+### References
+
+[libffi](https://github.com/libffi/libffi) to do all calls.
+
+Doc: [https://www.chiark.greenend.org.uk/doc/libffi-dev/html/The-Basics.html](https://www.chiark.greenend.org.uk/doc/libffi-dev/html/The-Basics.html)
+
+To read: [https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/](https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/)

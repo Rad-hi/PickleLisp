@@ -118,7 +118,7 @@ static char* TYPE_NAME_LUT[N_TYPES] = {
 };
 
 // Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
-ffi_type* color_elements[] = {&ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, &ffi_type_uchar, NULL};
+ffi_type* color_elements[] = {&ffi_type_schar, &ffi_type_schar, &ffi_type_schar, &ffi_type_schar, NULL};
 ffi_type ffi_color_type = {.size=0, .alignment=0, .type=FFI_TYPE_STRUCT, .elements=color_elements};
 
 /*
@@ -132,16 +132,16 @@ Lval_t* lval_read(mpc_ast_t* ast) {
     else if (strstr(ast->tag, "symbol"))  return lval_create_sym(ast->contents);
 
     Lval_t* x = NULL;
-    if      (strncmp(ast->tag, ">", 1) == 0) x = lval_create_sexpr();
+    if      (strncmp(ast->tag, ">", 2) == 0) x = lval_create_sexpr();
     else if (strstr(ast->tag, "sexpr")) x = lval_create_sexpr();
     else if (strstr(ast->tag, "qexpr")) x = lval_create_qexpr();
 
     for (int i = 0; i < ast->children_num; ++i) {
-        if      (strncmp(ast->children[i]->contents, "(", 1) == 0) continue;
-        else if (strncmp(ast->children[i]->contents, ")", 1) == 0) continue;
-        else if (strncmp(ast->children[i]->contents, "{", 1) == 0) continue;
-        else if (strncmp(ast->children[i]->contents, "}", 1) == 0) continue;
-        else if (strncmp(ast->children[i]->tag,  "regex", 5) == 0) continue;
+        if      (strncmp(ast->children[i]->contents, "(", 2) == 0) continue;
+        else if (strncmp(ast->children[i]->contents, ")", 2) == 0) continue;
+        else if (strncmp(ast->children[i]->contents, "{", 2) == 0) continue;
+        else if (strncmp(ast->children[i]->contents, "}", 2) == 0) continue;
+        else if (strncmp(ast->children[i]->tag,  "regex", 6) == 0) continue;
         else if (strstr(ast->children[i]->tag, "comment"))         continue;
         x = lval_add(x, lval_read(ast->children[i]));
     }
@@ -161,6 +161,7 @@ void lval_del(Lval_t* v) {
                 lenv_del(v->env);
                 lval_del(v->formals);
                 lval_del(v->body);
+                free(v->cif);
             }
             break;
         }
@@ -429,7 +430,8 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
     v->env = lenv_new();
     v->formals = formals;
     v->body = body;
-    v->extern_fn = NULL;
+    v->cif = malloc(sizeof(ffi_cif));
+    v->extern_ptr = NULL;
     v->is_extern = false;
     return v;
 }
@@ -437,7 +439,6 @@ static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
 static Lval_t* lval_create_fn(Lbuiltin_t fn) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_FN;
-    v->extern_fn = NULL;
     v->is_extern = false;
     v->builtin = fn;
     return v;
@@ -581,7 +582,6 @@ static Color_t color_from_list(Lval_t* l) {
     };
 }
 
-
 static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
     switch (input->type) {
         case LVAL_BOOL:
@@ -614,8 +614,6 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
             if (input->count == 0) {
                 *ret = C_VOID;
                 return true;
-            } else {
-                return false;
             }
         }
 
@@ -625,22 +623,14 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
     return false;
 }
 
-void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
-    // NOTE: shouldn't pass void as input, but in PickleLisp, void is how we indicate
-    // to the language that we take no inputs
-    if (inputs->count == 1 && atypes[0] == C_VOID) {
-        ffi_call(&fn->cif, FFI_FN(fn->extern_fn), ret, NULL);
-        return;
-    }
+static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
+    static void *avalues[MAX_INPUT_ARGS];
 
-    void *avalues[inputs->count];
     for (int i = 0; i < inputs->count; i++) {
-
         switch (atypes[i]) {
             case C_VOID: {
-                fprintf(stderr, "In func %s you cannot have one of the inputs as %s!",
-                                fn->name, TYPE_NAME_LUT[atypes[i]]);
-                assert(false);
+                avalues[i] = NULL;
+                break;
             }
             case C_INT: {
                 avalues[i] = &inputs->cell[i]->num.li;
@@ -665,12 +655,12 @@ void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
         }
     }
 
-    // printf("%d, %d, %s\n", *(int*)avalues[0], *(int*)avalues[1], (char*)avalues[2]);
-    ffi_call(&fn->cif, FFI_FN(fn->extern_fn), ret, avalues);
-    free(atypes);
+    ffi_call(fn->cif, FFI_FN(fn->extern_ptr), ret, avalues);
 }
 
 static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
+    static CTypes_e atypes[MAX_INPUT_ARGS];
+
     int n_given = inputs->count;
     int n_expct = fn->formals->count;
 
@@ -679,43 +669,40 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         return lval_create_err("Extern function expects [%i] args, got [%i].", n_expct, n_given);
     }
 
-    CTypes_e *atypes = malloc(n_given * sizeof(CTypes_e));
     for (int i = 0; i < n_given; ++i) {
         bool ret = lval_type_2_ctype(inputs->cell[i], &atypes[i]);
         Lval_t* arg_type = lenv_get(e, fn->formals->cell[i]);
         bool okay = ret && arg_type->c_type == atypes[i];
-        if (!okay) free(atypes);
         LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
-                              fn->name, i + 1, TYPE_NAME_LUT[atypes[i]], TYPE_NAME_LUT[arg_type->c_type]);
+                              __func__, i + 1, TYPE_NAME_LUT[atypes[i]], TYPE_NAME_LUT[arg_type->c_type]);
     }
 
     Lval_t* out = lenv_get(e, fn->body->cell[0]);
 
-#if 0
-
     switch (out->c_type) {
-        case C_VOID:{
+        case C_VOID: {
             ffi_call_extern(fn, atypes, inputs, NULL);
             return lval_create_ok();
         }
-        case C_INT:{
-            int ret;
+        case C_INT: {
+            long ret = 0;
             ffi_call_extern(fn, atypes, inputs, &ret);
             return lval_create_long(ret);
         }
-        case C_DOUBLE:{
+        case C_DOUBLE: {
             double ret;
             ffi_call_extern(fn, atypes, inputs, &ret);
             return lval_create_double(ret);
         }
-        case C_STRING:{
+        case C_STRING: {
             char *ret;
             ffi_call_extern(fn, atypes, inputs, &ret);
             return lval_create_str(ret);
         }
-        case C_COLOR:{
+        case C_COLOR: {
             Color_t *ret;
             ffi_call_extern(fn, atypes, inputs, &ret);
+            // TODO: color_2_lval_type
             Lval_t* l = lval_create_qexpr();
             lval_add(l, lval_create_long(ret->r));
             lval_add(l, lval_create_long(ret->g));
@@ -727,52 +714,6 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
             fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
             assert(false);
     }
-
-#else
-
-    int n_ret = fn->body->count;
-    if (n_expct == 1 && n_ret == 1) {
-        Lval_t* in = lenv_get(e, fn->formals->cell[0]);
-
-        // void fn(void)
-        if(in->c_type == C_VOID && out->c_type == C_VOID){
-            ((void (*)(void))(fn->extern_fn))();
-            return lval_create_ok();
-
-        // int fn(void)
-        } else if (in->c_type == C_VOID && out->c_type == C_INT) {
-            return lval_create_bool(((int (*)(void))(fn->extern_fn))());
-
-        // void fn(int)
-        } else if (in->c_type == C_INT && out->c_type == C_VOID) {
-            ((void (*)(int))(fn->extern_fn))(inputs->cell[0]->num.li);
-            return lval_create_ok();
-
-        // void fn(Color)
-        } else if (in->c_type == C_COLOR && out->c_type == C_VOID) {
-            Color_t c = color_from_list(inputs->cell[0]);
-            ((void (*)(Color_t))(fn->extern_fn))(c);
-            return lval_create_ok();
-        }
-    }
-
-    // HARDCODED: InitWindow
-    else if (n_expct == 3) {
-        ((void (*) (int, int, char*))(fn->extern_fn))(inputs->cell[0]->num.li, inputs->cell[1]->num.li, inputs->cell[2]->str);
-        return lval_create_ok();
-
-    // HARDCODED: DrawText
-    } else if (n_expct == 5) {
-        Lval_t* msg = inputs->cell[0];
-        Lval_t* x = inputs->cell[1];
-        Lval_t* y = inputs->cell[2];
-        Lval_t* sz = inputs->cell[3];
-        Color_t c = color_from_list(inputs->cell[4]);
-        ((void (*)(char*, int, int, int, Color_t))(fn->extern_fn))(msg->str, x->num.li, y->num.li, sz->num.li, c);
-        return lval_create_ok();
-    }
-
-#endif
 
     return lval_create_err("UNREACHABLE");
 }
@@ -796,7 +737,7 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
         Lval_t* sym = lval_pop(fn->formals, 0);
 
         /* Special case where we have a variable number of arguments, syntax `sym & syms` */
-        if (strncmp(sym->sym, "&", 1) == 0) {
+        if (strncmp(sym->sym, "&", 2) == 0) {
             if (fn->formals->count != 1) {
                 lval_del(a);
                 return lval_create_err("Invalid format; "
@@ -821,7 +762,7 @@ static Lval_t* lval_call(Lenv_t* e, Lval_t* fn, Lval_t* a) {
         Done with user input (only supplied named args, no va_args), but fn formals
         still have the `&` in them -> change to empty list
     */
-    if (fn->formals->count > 0 && strncmp(fn->formals->cell[0]->sym, "&", 1) == 0) {
+    if (fn->formals->count > 0 && strncmp(fn->formals->cell[0]->sym, "&", 2) == 0) {
         if (fn->formals->count != 2) {
             return lval_create_err("Invalid format; symbol `&` must "
                                     "be followed by a single symbol");
@@ -887,7 +828,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
     if (x->type == LVAL_BOOL) x->type = LVAL_INTEGER;
 
     // no arguments provided and `op` is `-` then perform negation
-    if ((strncmp(op, "-", 1) == 0) && a->count == 0) {
+    if ((strncmp(op, "-", 2) == 0) && a->count == 0) {
         if (x->type == LVAL_INTEGER) x->num.li = -x->num.li;
         else if (x->type == LVAL_DECIMAL) x->num.f = -x->num.f;
     }
@@ -906,11 +847,11 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 x->num.f = (double)x->num.li;
             }
 
-            if      (strncmp(op, "+", 1) == 0) x->num.f += y->num.f;
-            else if (strncmp(op, "-", 1) == 0) x->num.f -= y->num.f;
-            else if (strncmp(op, "*", 1) == 0) x->num.f *= y->num.f;
-            else if (strncmp(op, "^", 1) == 0) x->num.f = pow(x->num.f, y->num.f);
-            else if (strncmp(op, "%", 1) == 0) {
+            if      (strncmp(op, "+", 2) == 0) x->num.f += y->num.f;
+            else if (strncmp(op, "-", 2) == 0) x->num.f -= y->num.f;
+            else if (strncmp(op, "*", 2) == 0) x->num.f *= y->num.f;
+            else if (strncmp(op, "^", 2) == 0) x->num.f = pow(x->num.f, y->num.f);
+            else if (strncmp(op, "%", 2) == 0) {
                 if (y->num.f == 0.0) {
                     lval_del(x);
                     lval_del(y);
@@ -919,7 +860,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 }
                 x->num.f = fmod(x->num.f, y->num.f);
             }
-            else if (strncmp(op, "/", 1) == 0) {
+            else if (strncmp(op, "/", 2) == 0) {
                 if (y->num.f == 0.0) {
                     lval_del(x);
                     lval_del(y);
@@ -929,11 +870,11 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 x->num.f /= y->num.f;
             }
         } else {
-            if      (strncmp(op, "+", 1) == 0) x->num.li += y->num.li;
-            else if (strncmp(op, "-", 1) == 0) x->num.li -= y->num.li;
-            else if (strncmp(op, "*", 1) == 0) x->num.li *= y->num.li;
-            else if (strncmp(op, "^", 1) == 0) x->num.li = (long)pow(x->num.li, y->num.li);
-            else if (strncmp(op, "%", 1) == 0) {
+            if      (strncmp(op, "+", 2) == 0) x->num.li += y->num.li;
+            else if (strncmp(op, "-", 2) == 0) x->num.li -= y->num.li;
+            else if (strncmp(op, "*", 2) == 0) x->num.li *= y->num.li;
+            else if (strncmp(op, "^", 2) == 0) x->num.li = (long)pow(x->num.li, y->num.li);
+            else if (strncmp(op, "%", 2) == 0) {
                 if (y->num.li == 0) {
                     lval_del(x);
                     lval_del(y);
@@ -942,7 +883,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 }
                 x->num.li %= y->num.li;
             }
-            else if (strncmp(op, "/", 1) == 0) {
+            else if (strncmp(op, "/", 2) == 0) {
                 if (y->num.li == 0) {
                     lval_del(x);
                     lval_del(y);
@@ -1047,19 +988,19 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
             x->type = LVAL_DECIMAL;
             x->num.f = (double)x->num.li;
         }
-        if (strncmp(op, ">", 1) == 0)       res->num.li = x->num.f > y->num.f;
-        else if (strncmp(op, "<", 1) == 0)  res->num.li = x->num.f < y->num.f;
-        else if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.f >= y->num.f;
-        else if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.f <= y->num.f;
-        else if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.f && y->num.f;
-        else if (strncmp(op, "||", 2) == 0) res->num.li = x->num.f || y->num.f;
+        if (strncmp(op, ">", 2) == 0)       res->num.li = x->num.f > y->num.f;
+        else if (strncmp(op, "<", 2) == 0)  res->num.li = x->num.f < y->num.f;
+        else if (strncmp(op, ">=", 3) == 0) res->num.li = x->num.f >= y->num.f;
+        else if (strncmp(op, "<=", 3) == 0) res->num.li = x->num.f <= y->num.f;
+        else if (strncmp(op, "&&", 3) == 0) res->num.li = x->num.f && y->num.f;
+        else if (strncmp(op, "||", 3) == 0) res->num.li = x->num.f || y->num.f;
     } else {
-        if (strncmp(op, ">", 1) == 0)       res->num.li = x->num.li > y->num.li;
-        else if (strncmp(op, "<", 1) == 0)  res->num.li = x->num.li < y->num.li;
-        else if (strncmp(op, ">=", 2) == 0) res->num.li = x->num.li >= y->num.li;
-        else if (strncmp(op, "<=", 2) == 0) res->num.li = x->num.li <= y->num.li;
-        else if (strncmp(op, "&&", 2) == 0) res->num.li = x->num.li && y->num.li;
-        else if (strncmp(op, "||", 2) == 0) res->num.li = x->num.li || y->num.li;
+        if (strncmp(op, ">", 2) == 0)       res->num.li = x->num.li > y->num.li;
+        else if (strncmp(op, "<", 2) == 0)  res->num.li = x->num.li < y->num.li;
+        else if (strncmp(op, ">=", 3) == 0) res->num.li = x->num.li >= y->num.li;
+        else if (strncmp(op, "<=", 3) == 0) res->num.li = x->num.li <= y->num.li;
+        else if (strncmp(op, "&&", 3) == 0) res->num.li = x->num.li && y->num.li;
+        else if (strncmp(op, "||", 3) == 0) res->num.li = x->num.li || y->num.li;
     }
 
     lval_del(a);
@@ -1143,8 +1084,8 @@ static Lval_t* builtin_cmp(Lenv_t* e, Lval_t* a, char* op) {
     LASSERT_NUM(op, a, 2);
 
     bool res;
-    if (strncmp(op, "==", 2) == 0) res = lval_eq(a->cell[0], a->cell[1]);
-    if (strncmp(op, "!=", 2) == 0) res = !lval_eq(a->cell[0], a->cell[1]);
+    if (strncmp(op, "==", 3) == 0) res = lval_eq(a->cell[0], a->cell[1]);
+    if (strncmp(op, "!=", 3) == 0) res = !lval_eq(a->cell[0], a->cell[1]);
 
     lval_del(a);
     return lval_create_bool(res);
@@ -1305,8 +1246,8 @@ static Lval_t* builtin_var(Lenv_t* e, Lval_t* a, char* fn) {
     }
 
     for (int i = 0; i < symbols->count; ++i) {
-        if (strncmp(fn, "def", 3) == 0) lenv_def(e, symbols->cell[i], a->cell[i + 1]);
-        if (strncmp(fn, "=", 1) == 0)   lenv_put(e, symbols->cell[i], a->cell[i + 1]);
+        if (strncmp(fn, "def", 4) == 0) lenv_def(e, symbols->cell[i], a->cell[i + 1]);
+        if (strncmp(fn, "=", 2) == 0)   lenv_put(e, symbols->cell[i], a->cell[i + 1]);
     }
 
     lval_del(a);
@@ -1393,8 +1334,9 @@ static Lval_t* lval_copy(Lval_t* v) {
                 x->builtin = v->builtin;
             } else {
                 x->builtin = NULL;
-                x->cif = v->cif;
-                x->extern_fn = v->extern_fn;
+                x->cif = malloc(sizeof(ffi_cif));
+                memcpy(x->cif, v->cif, sizeof(ffi_cif));
+                x->extern_ptr = v->extern_ptr;
                 x->env = lenv_copy(v->env);
                 x->formals = lval_copy(v->formals);
                 x->body = lval_copy(v->body);
@@ -1712,16 +1654,16 @@ ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
 }
 
 char* ffi_type_2_str(ffi_type* t) {
-    if (t == &ffi_type_void) return "ffi_type_void";
-    if (t == &ffi_type_slong) return "ffi_type_slong";
-    if (t == &ffi_type_double) return "ffi_type_double";
+    if (t == &ffi_type_void)    return "ffi_type_void";
+    if (t == &ffi_type_slong)   return "ffi_type_slong";
+    if (t == &ffi_type_double)  return "ffi_type_double";
     if (t == &ffi_type_pointer) return "ffi_type_pointer";
-    if (t == &ffi_color_type) return "ffi_color_type";
+    if (t == &ffi_color_type)   return "ffi_color_type";
     return "unknown";
 }
 
 static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
-    LASSERT_NUM(__func__, a, 4);
+    LASSERT_NUM(__func__,  a, 4);
     LASSERT_TYPE(__func__, a, 0, LVAL_DLL);
     LASSERT_TYPE(__func__, a, 1, LVAL_STR);
     LASSERT_TYPE(__func__, a, 2, LVAL_QEXPR);
@@ -1754,31 +1696,31 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     }
 
     void* ptr = dlsym(dll, fn_name->str);
-    char* error = dlerror();
-    if (error != NULL) {
+    if (dlerror() != NULL) {
         return lval_create_err("[%s] -- Couldn't load symbol %s from DLL. ERROR: %s", __func__, fn_name->str, dlerror());
     }
     dlerror();
 
-    Lval_t* fn = lval_create_lambda(inputs, outputs);
     ffi_type* rtype = ctype_2_ffi_type(output_types[0]->c_type);
-    ffi_status status;
+    Lval_t* fn = lval_create_lambda(inputs, outputs);
     int n_args = inputs->count;
 
+    ffi_status status;
     if (n_args == 1 && input_types[0]->c_type == C_VOID) {
-        // printf("%s, ", ffi_type_2_str(&ffi_type_void)); printf("\n");
-        status = ffi_prep_cif(&fn->cif, FFI_DEFAULT_ABI, 0, rtype, NULL);
+        status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, 0, rtype, NULL);
     } else {
-        ffi_type* atypes[n_args];
+        static ffi_type* atypes[MAX_INPUT_ARGS];
         for (int i = 0; i < n_args; ++i) {
             atypes[i] = ctype_2_ffi_type(input_types[i]->c_type);
         }
-
-        // for (int i = 0; i < n_args; i++) {
-        //     printf("%s, ", ffi_type_2_str(atypes[i]));
-        // } printf("\n");
-
-        status = ffi_prep_cif(&fn->cif, FFI_DEFAULT_ABI, n_args, rtype, atypes);
+# if 0  /*print the argument types*/
+        printf("[%s] \nATYPES: ", fn_name->str);
+        for (int i = 0; i < n_args; i++) {
+            printf("%s, ", ffi_type_2_str(atypes[i]));
+        } printf("\n");
+        printf("RTYPE: %s, ", ffi_type_2_str(rtype)); printf("\n");
+# endif
+        status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, n_args, rtype, atypes);
     }
     if (status != FFI_OK) {
         // TODO: return lval error instead of panicking
@@ -1786,9 +1728,8 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
         exit(1);
     }
 
-    fn->extern_fn = ptr;
+    fn->extern_ptr = ptr;
     fn->is_extern = true;
-    fn->name = fn_name->str;
     lenv_def(e, fn_name, fn);
 
     free(input_types);

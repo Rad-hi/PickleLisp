@@ -8,6 +8,8 @@
 #include "config.h"
 #include "mpc.h"
 
+#define MAX_INPUT_ARGS  1024  // How many arguments could an extern function take
+
 #define min(a, b) ((a) > (b) ? (b) : (a))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
@@ -92,7 +94,7 @@ struct Lenv_t {
 };
 
 struct Lval_t {
-    char* name;
+    // char* name;  // TODO: add the name `symbol` of anything registered
     LVAL_e type;
     CTypes_e c_type;
 
@@ -111,9 +113,10 @@ struct Lval_t {
     Lval_t* formals;  // used to define a function's input variables (fn), and signature (extern)
     Lval_t* body;  // used to contain the function's body (fn), and return type (extern)
 
+    /* libffi and extern function linking stuff (along with dll) */
+    ffi_cif* cif;
     bool is_extern;
-    void *extern_fn;
-    ffi_cif cif;
+    void* extern_ptr;
 
     /* Expression */
     int count;
