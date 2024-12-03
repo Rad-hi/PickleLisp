@@ -9,9 +9,9 @@
 CC = cc
 
 CFLAGS = -Wall -g -DEXIT_ON_FAIL
-LFLAGS = -ledit -lm
+LFLAGS = -ledit -lm -ldl -lffi
 
-INCLUDES = -I../mpc -I../src
+INCLUDES = -I../mpc -I../libffi-3.4.6/include/
 SRCS = test.c ../mpc/mpc.c ../src/core.c ../src/lang.c
 
 # define the C object files 

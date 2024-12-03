@@ -2,9 +2,13 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <dlfcn.h>
+#include <ffi.h>
 
 #include "config.h"
 #include "mpc.h"
+
+#define MAX_INPUT_ARGS  1024  // How many arguments could an extern function take
 
 #define min(a, b) ((a) > (b) ? (b) : (a))
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -43,6 +47,23 @@ typedef struct Lenv_t Lenv_t;
 
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
 
+typedef struct {
+    char r;
+    char g;
+    char b;
+    char a;
+} Color_t;
+
+typedef enum {
+    C_VOID,
+    C_INT,
+    C_DOUBLE,
+    C_STRING,
+    C_COLOR,
+
+    N_TYPES,
+} CTypes_e;
+
 typedef enum {
     LVAL_INTEGER,
     LVAL_DECIMAL,
@@ -53,6 +74,8 @@ typedef enum {
     LVAL_FN,
     LVAL_SEXPR,
     LVAL_QEXPR,
+    LVAL_DLL,
+    LVAL_TYPE,
     LVAL_EXIT,
     LVAL_OK,
 } LVAL_e;
@@ -71,7 +94,9 @@ struct Lenv_t {
 };
 
 struct Lval_t {
+    // char* name;  // TODO: add the name `symbol` of anything registered
     LVAL_e type;
+    CTypes_e c_type;
 
     /* Lval_t can only represent one at a time */
     union {
@@ -80,12 +105,19 @@ struct Lval_t {
         char* err;
         char* sym;
         Lbuiltin_t builtin;
+        void* dll;
     };
 
     /* Functions' stuff (along with builtin) */
     Lenv_t* env;
-    Lval_t* formals;
-    Lval_t* body;
+    Lval_t* formals;  // used to define a function's input variables (fn), and signature (extern)
+    Lval_t* body;  // used to contain the function's body (fn), and return type (extern)
+
+    /* libffi and extern function linking stuff (along with dll) */
+    ffi_cif* cif;
+    ffi_type** atypes;
+    bool is_extern;
+    void* extern_ptr;
 
     /* Expression */
     int count;
