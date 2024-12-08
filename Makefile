@@ -11,8 +11,8 @@ CC = cc
 CFLAGS = -Wall -g
 LFLAGS = -ledit -lm -ldl -lffi
 
-INCLUDES = -I../mpc -I../libffi-3.4.6/include/
-SRCS = pickle_lisp.c ../mpc/mpc.c core.c lang.c
+INCLUDES = -I ./mpc -I ./libffi-3.4.6/include/
+SRCS = ./mpc/mpc.c ./src/core.c ./src/lang.c
 
 # define the C object files 
 #
@@ -28,7 +28,7 @@ OBJS = $(SRCS:.c=.o)
 #
 MAIN = PickleLisp
 
-
+TEST = test
 
 # -----------------------------------------------------------------
 # GENERIC PART (You can leave it as it is)
@@ -36,11 +36,15 @@ MAIN = PickleLisp
 #
 .PHONY: clean
 
-all:    $(MAIN)
+all:    $(MAIN) $(TEST) 
 	@echo  Compiled \--\> \./$(MAIN)
+	@echo  Compiled \--\> \./$(TEST)
 
-$(MAIN): $(OBJS) 
-	$(CC) $(CFLAGS) $(INCLUDES) -o $(MAIN) $(OBJS) $(LFLAGS)
+$(MAIN): $(OBJS)
+	$(CC) $(CFLAGS) $(INCLUDES) ./src/pickle_lisp.c -o $(MAIN) $(OBJS) $(LFLAGS)
+
+$(TEST): ./tests/test.o
+	$(CC) $(CFLAGS) $(INCLUDES) ./tests/test.c -o $(TEST) $(OBJS) $(LFLAGS)
 
 # this is a suffix replacement rule for building .o's from .c's
 # it uses automatic variables $<: the name of the prerequisite of
@@ -51,4 +55,4 @@ $(MAIN): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $<  -o $@
 
 clean:
-	$(RM) *.o *~ $(MAIN)
+	$(RM) ./src/*.o ./tests/*.o *~ $(MAIN)

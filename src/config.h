@@ -5,4 +5,4 @@
 #define REPL_IN         "8=> "
 #define LANG_NAME       "PickleLisp"
 #define EXTENSION       ".pickle"       // pickle scripts extension
-#define STD_LIB_PATH    "../stdlib/std.pickle"
+#define STD_LIB_PATH    "./stdlib/std.pickle"
