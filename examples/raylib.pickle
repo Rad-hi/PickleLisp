@@ -23,10 +23,10 @@
 ( def {win_width} 960 )
 ( def {win_height} 480 )
 
-( def {msg} "Hello, from PickleLisp!" )
 ( def {font_sz} 32 )
-( def {msg_len} 23 )  ; TODO: make function `len` work on strings
-( def {viz_msg_len} (* msg_len (/ font_sz 2)) )
+( def {msg} "Hello, from PickleLisp!" )
+( def {msg_len} ( len msg ) )
+( def {viz_msg_len} (* (- msg_len 1) (/ font_sz 2)) )
 
 ( def {x} (/ (- win_width viz_msg_len ) 2) )
 ( def {y} (/ (- win_height font_sz) 2) )

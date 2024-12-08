@@ -20,7 +20,7 @@
 
 ; recursive function to find the length of a list
 (fn {len l} {
-    if (== l nil)
+    if (|| (== l nil) (== l ""))
     {0}
     {+ 1 (len (tail l))}
 })

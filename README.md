@@ -2,12 +2,15 @@
 
 ## Building a custom LISP called PickleLisp
 
-It started by following this book: https://www.buildyourownlisp.com/contents
-Though, from the start, I followed a slightly different coding style, and kept adding features of my own here and there as I progressed through the code. Additionally, I added unit tests early on to help me move faster through the book, and to ensure a more certain iterating process.
+It started by following this book: https://www.buildyourownlisp.com/contents.
+
+Though, from the start, I followed a slightly different coding style, and kept adding features of my own here and there as I progressed through the book. Additionally, I added unit tests early on to help me move faster, and to ensure a more certain iterating process.
 
 ### Brief
 
-TODO
+I know nothing about LISPs, or functional programming. I found a book, and decided I'd get better at C, while learning a bit about functional programming through writing a LISP.
+
+This language is not useful, and is here only for educational purposes.
 
 ### Hello, World
 
@@ -34,14 +37,12 @@ make clean && make
 
 TODO
 
-### Side quest
-
-I am implementing an FFI system to interact with C libraries, and the test case is [RayLib](https://github.com/raysan5/raylib/tree/master).
-
 ### References
 
-[libffi](https://github.com/libffi/libffi) to do all calls.
+- [RayLib](https://github.com/raysan5/raylib/tree/master).
 
-Doc: [https://www.chiark.greenend.org.uk/doc/libffi-dev/html/The-Basics.html](https://www.chiark.greenend.org.uk/doc/libffi-dev/html/The-Basics.html)
+- [libffi](https://github.com/libffi/libffi)
 
-To read: [https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/](https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/)
+- [libffi Docs](https://www.chiark.greenend.org.uk/doc/libffi-dev/html/The-Basics.html)
+
+- [Article about system calls](https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/)

@@ -584,6 +584,15 @@ static Color_t color_from_list(Lval_t* l) {
     };
 }
 
+static Lval_t* color_to_list(Color_t* c) {
+    Lval_t* l = lval_create_qexpr();
+    lval_add(l, lval_create_long(c->r));
+    lval_add(l, lval_create_long(c->g));
+    lval_add(l, lval_create_long(c->b));
+    lval_add(l, lval_create_long(c->a));
+    return l;
+}
+
 static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
     switch (input->type) {
         case LVAL_BOOL:
@@ -660,8 +669,6 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* 
 }
 
 static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
-    static CTypes_e atypes[MAX_INPUT_ARGS];
-
     int n_given = inputs->count;
     int n_expct = fn->formals->count;
 
@@ -670,10 +677,12 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         return lval_create_err("Extern function expects [%i] args, got [%i].", n_expct, n_given);
     }
 
+    CTypes_e atypes[n_given];
     for (int i = 0; i < n_given; ++i) {
         bool ret = lval_type_2_ctype(inputs->cell[i], &atypes[i]);
         Lval_t* arg_type = lenv_get(e, fn->formals->cell[i]);
         bool okay = ret && arg_type->c_type == atypes[i];
+        if (!okay) free(atypes);
         LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
                               __func__, i + 1, TYPE_NAME_LUT[atypes[i]], TYPE_NAME_LUT[arg_type->c_type]);
     }
@@ -703,13 +712,7 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         case C_COLOR: {
             Color_t *ret;
             ffi_call_extern(fn, atypes, inputs, &ret);
-            // TODO: color_2_lval_type
-            Lval_t* l = lval_create_qexpr();
-            lval_add(l, lval_create_long(ret->r));
-            lval_add(l, lval_create_long(ret->g));
-            lval_add(l, lval_create_long(ret->b));
-            lval_add(l, lval_create_long(ret->a));
-            return l;
+            return color_to_list(ret);
         }
         default:
             fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
@@ -1715,19 +1718,10 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
         for (int i = 0; i < n_args; ++i) {
             fn->atypes[i] = ctype_2_ffi_type(input_types[i]->c_type);
         }
-# if 0  /*print the argument types*/
-        printf("[%s] \nATYPES: ", fn_name->str);
-        for (int i = 0; i < n_args; i++) {
-            printf("%s, ", ffi_type_2_str(atypes[i]));
-        } printf("\n");
-        printf("RTYPE: %s, ", ffi_type_2_str(rtype)); printf("\n");
-# endif
         status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, n_args, rtype, fn->atypes);
     }
     if (status != FFI_OK) {
-        // TODO: return lval error instead of panicking
-        fprintf(stderr, "ffi_prep_cif failed: %d\n", status);
-        exit(1);
+        return lval_create_err("[%s] -- Couldn't prep symbol %s through libffi `ffi_prep_cif`", __func__, fn_name->str);
     }
 
     fn->extern_ptr = ptr;

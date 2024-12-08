@@ -8,8 +8,6 @@
 #include "config.h"
 #include "mpc.h"
 
-#define MAX_INPUT_ARGS  1024  // How many arguments could an extern function take
-
 #define min(a, b) ((a) > (b) ? (b) : (a))
 #define max(a, b) ((a) > (b) ? (a) : (b))
 
