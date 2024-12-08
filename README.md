@@ -26,7 +26,7 @@ make clean && make
 I wrote tests myself without using any framework, so they're weirdly implemented, and are kinda hard to modify. But, they do the job.
 
 ```bash
-cd PickleLisp/test
+cd PickleLisp
 make clean && make
 
 ./test
