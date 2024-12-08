@@ -15,11 +15,10 @@ This language is not useful, and is here only for educational purposes.
 ### Hello, World
 
 ```bash
-cd PickleLisp/src
+cd PickleLisp
 make clean && make
 
-cd ..
-./src/PickleLisp examples/hello_world.pickle
+./PickleLisp examples/hello_world.pickle
 ```
 
 ### Tests

@@ -17,11 +17,7 @@ jobs:
           git clone https://github.com/orangeduck/mpc.git
       - name: Build
         run: |
-          cd src/
-          make
-          cd ../test
           make
       - name: Run tests
         run: |
-          cd test
           ./test
