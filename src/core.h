@@ -57,7 +57,7 @@ typedef enum {
     C_INT,
     C_DOUBLE,
     C_STRING,
-    C_COLOR,
+    C_USER_DEF,
 
     N_TYPES,
 } CTypes_e;
@@ -74,6 +74,7 @@ typedef enum {
     LVAL_QEXPR,
     LVAL_DLL,
     LVAL_TYPE,
+    LVAL_USER_TYPE,
     LVAL_EXIT,
     LVAL_OK,
 } LVAL_e;
