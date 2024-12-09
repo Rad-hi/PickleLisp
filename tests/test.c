@@ -61,6 +61,8 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
 #endif
             break;
         }
+        case LVAL_TYPE:
+        case LVAL_DLL:
         case LVAL_SEXPR:
         case LVAL_QEXPR:
         case LVAL_SYM:
