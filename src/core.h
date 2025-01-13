@@ -95,7 +95,7 @@ struct Lval_t {
         char* sym;
         Lbuiltin_t builtin;
         void* dll;
-        ffi_type* ud_ffi_t;
+        ffi_type* ud_ffi_t;  // describes a user-defined ffi_type [a struct]
     };
 
     /* Functions' stuff (along with builtin) */
@@ -108,6 +108,8 @@ struct Lval_t {
     ffi_type** atypes;
     bool is_extern;
     void* extern_ptr;
+
+    size_t ud_ffi_sz;  // the size of the entire user-defined type
 
     /* Expression */
     int count;

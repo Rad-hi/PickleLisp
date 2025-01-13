@@ -76,10 +76,10 @@ static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body);
 static Lval_t* lval_create_dll(void* dll);
-static Lval_t* lval_create_color_type(void);
 static Lval_t* lval_create_str_type(void);
 static Lval_t* lval_create_double_type(void);
 static Lval_t* lval_create_int_type(void);
+static Lval_t* lval_create_char_type(void);
 static Lval_t* lval_create_void_type(void);
 static Lval_t* lval_create_user_defined_type(void);
 
@@ -87,6 +87,10 @@ static void    lval_expr_print(Lval_t* v, char open, char close);
 static char*   ltype_name(LVAL_e t);
 static void    lval_print_str(Lval_t* v);
 static char*   freadline(FILE* fp, size_t size);
+
+static ffi_type* lval_2_ffi_type(Lval_t* input_type);
+static void*     struct_from_list(Lval_t* vals, Lval_t* l_in_types);
+static void      ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, Lval_t* inputs, void* ret);
 
 /*
     Keep a record of all builtin names that exist in the language,
@@ -287,9 +291,9 @@ PUBLIC void lenv_add_builtins(Lenv_t* e) {
     /* types */
     lenv_add_builtin_const(e, "Void",   lval_create_void_type());
     lenv_add_builtin_const(e, "Int",    lval_create_int_type());
+    lenv_add_builtin_const(e, "Char",   lval_create_char_type());
     lenv_add_builtin_const(e, "Double", lval_create_double_type());
     lenv_add_builtin_const(e, "String", lval_create_str_type());
-    lenv_add_builtin_const(e, "hardcoded_Color",  lval_create_color_type());
 }
 
 /*
@@ -476,6 +480,13 @@ static Lval_t* lval_create_int_type(void) {
     return v;
 }
 
+static Lval_t* lval_create_char_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_CHAR;
+    return v;
+}
+
 static Lval_t* lval_create_double_type(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_TYPE;
@@ -490,18 +501,12 @@ static Lval_t* lval_create_str_type(void) {
     return v;
 }
 
-static Lval_t* lval_create_color_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
-    v->type = LVAL_TYPE;
-    v->c_type = C_COLOR;
-    return v;
-}
-
 static Lval_t* lval_create_user_defined_type(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_USER_TYPE;
     v->c_type = C_STRUCT;
     v->count = 0;
+    v->ud_ffi_sz = 0;
     v->ud_ffi_t = NULL;
     v->cell = NULL;
     return v;
@@ -571,21 +576,49 @@ static Lval_t* lval_read_str(mpc_ast_t* ast) {
     return str;
 }
 
-static Color_t color_from_list(Lval_t* l) {
-    return (Color_t){
-        (char)l->cell[0]->num.li,
-        (char)l->cell[1]->num.li,
-        (char)l->cell[2]->num.li,
-        (char)l->cell[3]->num.li,
-    };
+
+// Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
+static void* struct_from_list(Lval_t* vals, Lval_t* l_in_type) {
+
+    void* data = malloc(l_in_type->ud_ffi_sz);
+    if (data == NULL) {
+        fprintf(stderr, "Couldn't allocate %lu bytes. Buy more RAM!, %s", l_in_type->ud_ffi_sz, __func__);
+        exit(69);
+    }
+
+    size_t offset = 0;
+    size_t sz = 0;
+    for (int i = 0; i < vals->count; ++i) {
+        switch (vals->cell[i]->type) {
+            case LVAL_BOOL:
+            case LVAL_INTEGER: {
+                sz = sizeof_ctype(l_in_type->cell[i]->c_type);
+                memcpy((char*)data + offset, &vals->cell[i]->num.li, sz);
+                break;
+            }
+            case LVAL_DECIMAL: {
+                sz = sizeof_ctype(C_DOUBLE);
+                memcpy((char*)data + offset, &vals->cell[i]->num.f, sz);
+                break;
+            }
+            case LVAL_STR: {
+                sz = sizeof_ctype(C_STRING);
+                memcpy((char*)data + offset, &vals->cell[i]->str, sz);
+                break;
+            }
+            default: {
+                fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
+                assert(false);
+            }
+        }
+        offset += sz;
+    }
+    return data;
 }
 
-static Lval_t* color_to_list(Color_t* c) {
+static Lval_t* user_defined_to_list(void* v) {
     Lval_t* l = lval_create_qexpr();
-    lval_add(l, lval_create_long(c->r));
-    lval_add(l, lval_create_long(c->g));
-    lval_add(l, lval_create_long(c->b));
-    lval_add(l, lval_create_long(c->a));
+    // TODO: fill in the data fetching from the return type
     return l;
 }
 
@@ -611,8 +644,8 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
             if (input->count == 0) {
                 *ret = C_VOID;
                 return true;
-            } else if (input->count == 4) {
-                *ret = C_COLOR;
+            } else if (input->count > 0) {
+                *ret = C_STRUCT;
                 return true;
             }
         }
@@ -630,8 +663,9 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
     return false;
 }
 
-static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* ret) {
+static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, Lval_t* inputs, void* ret) {
     void *avalues[inputs->count];
+    int to_free = -1;
     for (int i = 0; i < inputs->count; i++) {
         switch (atypes[i]) {
             case C_VOID: {
@@ -650,9 +684,9 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* 
                 avalues[i] = &inputs->cell[i]->str;
                 break;
             }
-            case C_COLOR: {
-                Color_t c = color_from_list(inputs->cell[i]);
-                avalues[i] = &c;
+            case C_STRUCT: {
+                avalues[i] = struct_from_list(inputs->cell[i], l_in_types[i]);
+                to_free = i;
                 break;
             }
             default:
@@ -662,6 +696,8 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* 
     }
 
     ffi_call(fn->cif, FFI_FN(fn->extern_ptr), ret, avalues);
+    if (to_free != -1) free(avalues[to_free]);
+    lval_del(inputs);
 }
 
 static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
@@ -674,41 +710,41 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
     }
 
     CTypes_e atypes[n_given];
+    Lval_t* l_in_types[n_given];
     for (int i = 0; i < n_given; ++i) {
         bool ret = lval_type_2_ctype(inputs->cell[i], &atypes[i]);
-        Lval_t* arg_type = lenv_get(e, fn->formals->cell[i]);
-        bool okay = ret && arg_type->c_type == atypes[i];
-        if (!okay) free(atypes);
+        l_in_types[i] = lenv_get(e, fn->formals->cell[i]);
+        bool okay = ret && l_in_types[i]->c_type == atypes[i];
         LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
-                              __func__, i + 1, CTYPE_2_NAME[atypes[i]], CTYPE_2_NAME[arg_type->c_type]);
+                              __func__, i + 1, CTYPE_2_NAME[atypes[i]], CTYPE_2_NAME[l_in_types[i]->c_type]);
     }
 
     Lval_t* out = lenv_get(e, fn->body->cell[0]);
 
     switch (out->c_type) {
         case C_VOID: {
-            ffi_call_extern(fn, atypes, inputs, NULL);
+            ffi_call_extern(fn, atypes, l_in_types, inputs, NULL);
             return lval_create_ok();
         }
         case C_INT: {
             long ret = 0;
-            ffi_call_extern(fn, atypes, inputs, &ret);
+            ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_long(ret);
         }
         case C_DOUBLE: {
             double ret;
-            ffi_call_extern(fn, atypes, inputs, &ret);
+            ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_double(ret);
         }
         case C_STRING: {
             char *ret;
-            ffi_call_extern(fn, atypes, inputs, &ret);
+            ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_str(ret);
         }
-        case C_COLOR: {
-            Color_t *ret;
-            ffi_call_extern(fn, atypes, inputs, &ret);
-            return color_to_list(ret);
+        case C_STRUCT: {
+            void *ret = NULL;
+            ffi_call_extern(fn, atypes, l_in_types, inputs, ret);
+            return user_defined_to_list(ret);
         }
         default:
             fprintf(stderr, "You added a new C-type, but forgot to add it to %s!\n", __func__);
@@ -1325,6 +1361,7 @@ static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
 static Lval_t* lval_copy(Lval_t* v) {
     Lval_t* x = malloc(sizeof(Lval_t));
     x->type = v->type;
+    x->c_type = v->c_type;
 
     switch (v->type) {
         case LVAL_FN: {
@@ -1347,7 +1384,6 @@ static Lval_t* lval_copy(Lval_t* v) {
         }
 
         case LVAL_DLL:       x->dll = v->dll; break;
-        case LVAL_TYPE:      x->c_type = v->c_type; break;
         case LVAL_DECIMAL:   x->num.f = v->num.f; break;
 
         case LVAL_BOOL:
@@ -1369,7 +1405,17 @@ static Lval_t* lval_copy(Lval_t* v) {
             break;
         }
 
-        case LVAL_USER_TYPE:
+        case LVAL_USER_TYPE: {
+            x->ud_ffi_t = v->ud_ffi_t;
+            x->ud_ffi_sz = v->ud_ffi_sz;
+            x->count = v->count;
+            x->cell = malloc(sizeof(Lval_t*) * x->count);
+            for (int i = 0; i < x->count; ++i) {
+                x->cell[i] = lval_copy(v->cell[i]);
+            }
+            break;
+        }
+
         case LVAL_QEXPR:
         case LVAL_SEXPR: {
             x->count = v->count;
@@ -1381,6 +1427,7 @@ static Lval_t* lval_copy(Lval_t* v) {
         }
 
         case LVAL_OK:
+        case LVAL_TYPE:
         case LVAL_EXIT: break;
 
         default:
@@ -1645,6 +1692,11 @@ static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a) {
     return lval_create_ok();
 }
 
+static ffi_type* lval_2_ffi_type(Lval_t* input_type) {
+    if (input_type->type == LVAL_USER_TYPE) return input_type->ud_ffi_t;
+    return ctype_2_ffi_type(input_type->c_type);
+}
+
 static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM(__func__,  a, 4);
     LASSERT_TYPE(__func__, a, 0, LVAL_DLL);
@@ -1692,7 +1744,7 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
         status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, 0, rtype, NULL);
     } else {
         for (int i = 0; i < n_args; ++i) {
-            fn->atypes[i] = ctype_2_ffi_type(input_types[i]->c_type);
+            fn->atypes[i] = lval_2_ffi_type(input_types[i]);
         }
         status = ffi_prep_cif(fn->cif, FFI_DEFAULT_ABI, n_args, rtype, fn->atypes);
     }
@@ -1726,6 +1778,7 @@ static Lval_t* builtin_mktype(Lenv_t* e, Lval_t* a) {
 
     Lval_t* sub_type;
     CTypes_e ctypes[n_types];
+    size_t sz = 0;
     for (int i = 0; i < n_types; ++i) {
         sub_type = lenv_get(e, types->cell[i]);
         bool okay = sub_type->type == LVAL_TYPE;
@@ -1733,10 +1786,12 @@ static Lval_t* builtin_mktype(Lenv_t* e, Lval_t* a) {
                          type_name->str, i + 1, ltype_name(types->cell[i]->type), ltype_name(LVAL_TYPE));
 
         ctypes[i] = sub_type->c_type;
+        sz += sizeof_ctype(ctypes[i]);
         lval_add(ltype, sub_type);
     }
 
     ltype->ud_ffi_t = ffi_type_from_user_defined(ctypes, n_types);
+    ltype->ud_ffi_sz = sz;
     lenv_add_builtin_const(e, type_name->str, ltype);
 
     lval_del(type_name);
