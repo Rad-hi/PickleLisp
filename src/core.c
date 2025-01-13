@@ -85,7 +85,6 @@ static void    lval_expr_print(Lval_t* v, char open, char close);
 static char*   ltype_name(LVAL_e t);
 static void    lval_print_str(Lval_t* v);
 static char*   freadline(FILE* fp, size_t size);
-static Color_t color_from_list(Lval_t* l);
 
 /*
     Keep a record of all builtin names that exist in the language,
@@ -93,11 +92,6 @@ static Color_t color_from_list(Lval_t* l);
 */
 static void _register_builtin_name(char* name);
 static bool _lookup_builtin_name(char* name);
-typedef struct {
-    char** names;
-    int* lengths;
-    int count;
-} Builtins_record_t;
 
 // TODO: Change to a hash-map, so that runtime lookup is faster
 //       (though this being a contiguous array, maybe lookup is faster
@@ -108,24 +102,11 @@ static Builtins_record_t __builtins__ = {
     .count = 0
 };
 
-// NOTE: keep the same order as the definition
-static char* TYPE_NAME_LUT[N_TYPES] = {
-    "C_VOID",
-    "C_INT",
-    "C_DOUBLE",
-    "C_STRING",
-    "C_COLOR",
-};
-
-// Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
-ffi_type* color_elements[5] = {&ffi_type_schar, &ffi_type_schar, &ffi_type_schar, &ffi_type_schar, NULL};
-ffi_type ffi_color_type = {.size=0, .alignment=0, .type=FFI_TYPE_STRUCT, .elements=color_elements};
-
 /*
   Recursively constructs the list of values (lval)
   based on theirs tags which are defined in lang.h
 */
-Lval_t* lval_read(mpc_ast_t* ast) {
+PUBLIC Lval_t* lval_read(mpc_ast_t* ast) {
     if      (strstr(ast->tag, "integer")) return lval_read_long(ast);
     else if (strstr(ast->tag, "decimal")) return lval_read_double(ast);
     else if (strstr(ast->tag, "string"))  return lval_read_str(ast);
@@ -153,7 +134,7 @@ Lval_t* lval_read(mpc_ast_t* ast) {
   Recursively deletes the list-value pointer as well as
   any children that were allocated on the heap
 */
-void lval_del(Lval_t* v) {
+PUBLIC void lval_del(Lval_t* v) {
     switch (v->type) {
         case LVAL_FN: {
             bool user_defined_fn = v->builtin == NULL;
@@ -189,13 +170,13 @@ void lval_del(Lval_t* v) {
             break;
         }
         default: 
-            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!\n", __func__);
             assert(false);
     }
     free(v);
 }
 
-void lval_print(Lval_t* v) {
+PUBLIC void lval_print(Lval_t* v) {
     switch (v->type) {
         case LVAL_INTEGER: printf("%li", v->num.li); break;
         case LVAL_DECIMAL: printf("%f", v->num.f); break;
@@ -207,7 +188,7 @@ void lval_print(Lval_t* v) {
         case LVAL_QEXPR:   lval_expr_print(v, '{', '}'); break;
         case LVAL_EXIT:    printf("Exiting"); break;
         case LVAL_DLL:     printf("Dynamic library"); break;
-        case LVAL_TYPE:    printf("%s", TYPE_NAME_LUT[v->c_type]); break;
+        case LVAL_TYPE:    printf("%s", CTYPE_2_NAME[v->c_type]); break;
         case LVAL_OK:      break;
         case LVAL_FN: {
             if (v->builtin != NULL) {
@@ -222,17 +203,17 @@ void lval_print(Lval_t* v) {
             break;
         }
         default:
-            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!\n", __func__);
             assert(false);
     }
 }
 
-void lval_println(Lval_t* v) {
+PUBLIC void lval_println(Lval_t* v) {
     if (v->type == LVAL_OK) return;
     lval_print(v); printf("\n");
 }
 
-Lenv_t* lenv_new(void) {
+PUBLIC Lenv_t* lenv_new(void) {
     Lenv_t* e = malloc(sizeof(Lenv_t));
     e->parent = NULL;
     e->count = 0;
@@ -241,7 +222,7 @@ Lenv_t* lenv_new(void) {
     return e;
 }
 
-void lenv_del(Lenv_t* e) {
+PUBLIC void lenv_del(Lenv_t* e) {
     for (int i = 0; i < e->count; ++i) {
         free(e->syms[i]);
         lval_del(e->vals[i]);
@@ -254,7 +235,7 @@ void lenv_del(Lenv_t* e) {
 /*
     Register all builtins in the environment
 */
-void lenv_add_builtins(Lenv_t* e) {
+PUBLIC void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "list",  builtin_list);
     lenv_add_builtin(e, "head",  builtin_head);
     lenv_add_builtin(e, "tail",  builtin_tail);
@@ -309,13 +290,13 @@ void lenv_add_builtins(Lenv_t* e) {
 /*
     registers all symbols in an environment as builtin names
 */
-void _register_builtin_names_from_env(Lenv_t* e) {
+PUBLIC void _register_builtin_names_from_env(Lenv_t* e) {
     for (int i = 0; i < e->count; ++i) {
         _register_builtin_name(e->syms[i]);
     }
 }
 
-void _del_builtin_names(void) {
+PUBLIC void _del_builtin_names(void) {
     for (int i = 0; i < __builtins__.count; ++i) {
         free(__builtins__.names[i]);
     }
@@ -327,7 +308,7 @@ void _del_builtin_names(void) {
   Recursively creates the list of symbolic expressions by
   calling `lval_eval_sexpr` which itself calls lval_eval
 */
-Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
+PUBLIC Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
     if (v->type == LVAL_SYM) {
         Lval_t* x = lenv_get(e, v);
         lval_del(v);
@@ -337,7 +318,7 @@ Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
     return v;
 }
 
-Lval_t* lval_create_sexpr(void) {
+PUBLIC Lval_t* lval_create_sexpr(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_SEXPR;
     v->count = 0;
@@ -345,7 +326,7 @@ Lval_t* lval_create_sexpr(void) {
     return v;
 }
 
-Lval_t* lval_create_str(char* s) {
+PUBLIC Lval_t* lval_create_str(char* s) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_STR;
     v->str = malloc(strlen(s) + 1);
@@ -353,14 +334,14 @@ Lval_t* lval_create_str(char* s) {
     return v;
 }
 
-Lval_t* lval_add(Lval_t* v, Lval_t* x) {
+PUBLIC Lval_t* lval_add(Lval_t* v, Lval_t* x) {
     v->count++;
     v->cell = realloc(v->cell, sizeof(Lval_t*) * v->count);
     v->cell[v->count - 1] = x;
     return v;
 }
 
-Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
+PUBLIC Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM(__func__, a, 1);
     LASSERT_TYPE(__func__, a, 0, LVAL_STR);
 
@@ -660,7 +641,7 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t* inputs, void* 
                 break;
             }
             default:
-                fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
+                fprintf(stderr, "You added a new C-type, but forgot to add it to %s!\n", __func__);
                 assert(false);
         }
     }
@@ -684,7 +665,7 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         bool okay = ret && arg_type->c_type == atypes[i];
         if (!okay) free(atypes);
         LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
-                              __func__, i + 1, TYPE_NAME_LUT[atypes[i]], TYPE_NAME_LUT[arg_type->c_type]);
+                              __func__, i + 1, CTYPE_2_NAME[atypes[i]], CTYPE_2_NAME[arg_type->c_type]);
     }
 
     Lval_t* out = lenv_get(e, fn->body->cell[0]);
@@ -715,7 +696,7 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
             return color_to_list(ret);
         }
         default:
-            fprintf(stderr, "You added a new C-type, but forgot to add it to %s!", __func__);
+            fprintf(stderr, "You added a new C-type, but forgot to add it to %s!\n", __func__);
             assert(false);
     }
 
@@ -1075,7 +1056,7 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
         case LVAL_EXIT: return 1;
         case LVAL_OK: return 1;
         default:
-            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!\n", __func__);
             assert(false);
     }
     return 0;
@@ -1387,7 +1368,7 @@ static Lval_t* lval_copy(Lval_t* v) {
         case LVAL_EXIT: break;
 
         default:
-            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!\n", __func__);
             assert(false);
     }
     return x;
@@ -1498,7 +1479,7 @@ static char* ltype_name(LVAL_e t) {
         case LVAL_DLL:      return "DLL";
         case LVAL_TYPE:     return "C_Type";
         default:
-            fprintf(stderr, "You added a new type, but forgot to add it to %s!", __func__);
+            fprintf(stderr, "You added a new type, but forgot to add it to %s!\n", __func__);
             assert(false);
     }
 }
@@ -1560,7 +1541,7 @@ static Lval_t* builtin_read(Lenv_t* e, Lval_t* a) {
         free(s);
         return lval_create_ok();
     } else {
-        return lval_create_err("Function `%s` coudn't read input string", __func__);
+        return lval_create_err("Function `%s` coudn't read input string\n", __func__);
     }
 }
 
@@ -1646,28 +1627,6 @@ static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a) {
     return lval_create_ok();
 }
 
-ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
-    switch (c_type) {
-        case C_VOID:   return &ffi_type_void;
-        case C_INT:    return &ffi_type_slong;
-        case C_DOUBLE: return &ffi_type_double;
-        case C_STRING: return &ffi_type_pointer;
-        case C_COLOR:  return &ffi_color_type;
-        default:
-            fprintf(stderr, "You're asking for an FFI equivalent to a ctype that's not handled %s!", __func__);
-            assert(false);
-    }
-}
-
-char* ffi_type_2_str(ffi_type* t) {
-    if (t == &ffi_type_void)    return "ffi_type_void";
-    if (t == &ffi_type_slong)   return "ffi_type_slong";
-    if (t == &ffi_type_double)  return "ffi_type_double";
-    if (t == &ffi_type_pointer) return "ffi_type_pointer";
-    if (t == &ffi_color_type)   return "ffi_color_type";
-    return "unknown";
-}
-
 static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM(__func__,  a, 4);
     LASSERT_TYPE(__func__, a, 0, LVAL_DLL);
@@ -1680,23 +1639,21 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     Lval_t* inputs = lval_pop(a, 1);
     Lval_t* outputs = lval_pop(a, 1);
 
-    Lval_t** input_types = malloc(sizeof(Lval_t*) * inputs->count);
+    Lval_t* input_types[inputs->count];
     for (int i = 0; i < inputs->count; ++i) {
         input_types[i] = lenv_get(e, inputs->cell[i]);
         bool okay = input_types[i]->type == LVAL_TYPE;
-        if (!okay) free(input_types);
         LASSERT(a, okay, "Extern def of func `%s` got input arg [%i] of type [%s], expected [%s]",
                          fn_name->str, i + 1, ltype_name(inputs->cell[i]->type), ltype_name(LVAL_TYPE));
     }
 
-    LASSERT(a, (outputs->count <= 1), "Extern def of func `%s` got [%i] output args, "
-                                      "only 1 is supported at the time", fn_name->str, outputs->count);
+    LASSERT(a, (outputs->count == 1), "Extern def of func `%s` got [%i] output args. "
+                                      "Should get exactly 1 return type", fn_name->str, outputs->count);
 
-    Lval_t** output_types = malloc(sizeof(Lval_t*) * inputs->count);
+    Lval_t* output_types[inputs->count];
     for (int i = 0; i < outputs->count; ++i) {
         output_types[i] = lenv_get(e, outputs->cell[i]);
         bool okay = output_types[i]->type == LVAL_TYPE;
-        if (!okay) free(output_types);
         LASSERT(a, okay, "Extern def of func `%s` got output arg [%i] of type [%s], expected [%s]",
                          fn_name->str, i + 1, ltype_name(outputs->cell[i]->type), ltype_name(LVAL_TYPE));
     }
@@ -1728,8 +1685,9 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     fn->is_extern = true;
     lenv_def(e, fn_name, fn);
 
-    free(input_types);
-    free(output_types);
+    lval_del(fn_name);
+    lval_del(inputs);
+    lval_del(outputs);
 
     return lval_create_ok();
 }

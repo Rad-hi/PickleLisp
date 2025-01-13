@@ -6,6 +6,7 @@
 #include <ffi.h>
 
 #include "config.h"
+#include "ctypes.h"
 #include "mpc.h"
 
 #define min(a, b) ((a) > (b) ? (b) : (a))
@@ -46,21 +47,10 @@ typedef struct Lenv_t Lenv_t;
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
 
 typedef struct {
-    char r;
-    char g;
-    char b;
-    char a;
-} Color_t;
-
-typedef enum {
-    C_VOID,
-    C_INT,
-    C_DOUBLE,
-    C_STRING,
-    C_COLOR,
-
-    N_TYPES,
-} CTypes_e;
+    char** names;
+    int* lengths;
+    int count;
+} Builtins_record_t;
 
 typedef enum {
     LVAL_INTEGER,
