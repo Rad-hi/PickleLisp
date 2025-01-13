@@ -1,0 +1,4 @@
+( mktype "Pair" {Int Int} )
+
+( print Pair )
+( print ( type { Pair } ) )

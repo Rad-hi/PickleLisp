@@ -9,6 +9,7 @@ typedef enum {
     C_INT,
     C_DOUBLE,
     C_STRING,
+    C_USER_DEF,
     C_COLOR,
 
     N_TYPES,

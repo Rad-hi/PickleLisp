@@ -6,8 +6,8 @@
 (extern raylib "EndDrawing" {Void} {Void})
 (extern raylib "CloseWindow" {Void} {Void})
 (extern raylib "SetTargetFPS" {Int} {Void})
-(extern raylib "ClearBackground" {Color} {Void})
-(extern raylib "DrawText" {String Int Int Int Color} {Void})
+(extern raylib "ClearBackground" {hardcoded_Color} {Void})
+(extern raylib "DrawText" {String Int Int Int hardcoded_Color} {Void})
 (extern raylib "GetRandomValue" {Int Int} {Int})
 
 ( def {ZOZINGRAY}   (list 22 22 22 255) )

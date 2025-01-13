@@ -6,6 +6,7 @@ char* CTYPE_2_NAME[N_TYPES] = {
     "C_INT",
     "C_DOUBLE",
     "C_STRING",
+    "C_USER_DEF",
     "C_COLOR",
 };
 

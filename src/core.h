@@ -66,6 +66,7 @@ typedef enum {
     LVAL_TYPE,
     LVAL_EXIT,
     LVAL_OK,
+    LVAL_USER_TYPE,
 } LVAL_e;
 
 typedef union {
