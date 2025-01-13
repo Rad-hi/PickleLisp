@@ -500,7 +500,9 @@ static Lval_t* lval_create_color_type(void) {
 static Lval_t* lval_create_user_defined_type(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_USER_TYPE;
+    v->c_type = C_STRUCT;
     v->count = 0;
+    v->ud_ffi_t = NULL;
     v->cell = NULL;
     return v;
 }
@@ -1658,9 +1660,10 @@ static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a) {
     Lval_t* input_types[inputs->count];
     for (int i = 0; i < inputs->count; ++i) {
         input_types[i] = lenv_get(e, inputs->cell[i]);
-        bool okay = input_types[i]->type == LVAL_TYPE;
-        LASSERT(a, okay, "Extern def of func `%s` got input arg [%i] of type [%s], expected [%s]",
-                         fn_name->str, i + 1, ltype_name(inputs->cell[i]->type), ltype_name(LVAL_TYPE));
+        bool okay = input_types[i]->type == LVAL_TYPE || input_types[i]->type == LVAL_USER_TYPE;
+        LASSERT(a, okay, "Extern def of func `%s` got input arg [%i] of type [%s], expected [%s, %s]",
+                         fn_name->str, i + 1, ltype_name(inputs->cell[i]->type),
+                         ltype_name(LVAL_TYPE), ltype_name(LVAL_USER_TYPE));
     }
 
     LASSERT(a, (outputs->count == 1), "Extern def of func `%s` got [%i] output args. "
@@ -1716,20 +1719,24 @@ static Lval_t* builtin_mktype(Lenv_t* e, Lval_t* a) {
     // TODO: make sure that the type hasn't been defined ?? or fuck it, it's the user's responsibility ??
     Lval_t* type_name = lval_pop(a, 0);
     Lval_t* types = lval_pop(a, 0);
+    int n_types = types->count;
 
     // TODO: pass name to add to the type
     Lval_t* ltype = lval_create_user_defined_type();
 
     Lval_t* sub_type;
-    for (int i = 0; i < types->count; ++i) {
+    CTypes_e ctypes[n_types];
+    for (int i = 0; i < n_types; ++i) {
         sub_type = lenv_get(e, types->cell[i]);
         bool okay = sub_type->type == LVAL_TYPE;
         LASSERT(a, okay, "mktype of `%s` got arg [%i] of type [%s], expected [%s]",
                          type_name->str, i + 1, ltype_name(types->cell[i]->type), ltype_name(LVAL_TYPE));
 
+        ctypes[i] = sub_type->c_type;
         lval_add(ltype, sub_type);
     }
 
+    ltype->ud_ffi_t = ffi_type_from_user_defined(ctypes, n_types);
     lenv_add_builtin_const(e, type_name->str, ltype);
 
     lval_del(type_name);

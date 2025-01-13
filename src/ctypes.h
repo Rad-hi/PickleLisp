@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <ffi.h>
 
 typedef enum {
@@ -9,8 +10,8 @@ typedef enum {
     C_INT,
     C_DOUBLE,
     C_STRING,
-    C_USER_DEF,
-    C_COLOR,
+    C_COLOR,  // TODO: remove
+    C_STRUCT,
 
     N_TYPES,
 } CTypes_e;
@@ -27,3 +28,4 @@ char* CTYPE_2_NAME[N_TYPES];
 
 ffi_type* ctype_2_ffi_type(CTypes_e c_type);
 char* ffi_type_2_str(ffi_type* t);
+ffi_type* ffi_type_from_user_defined(CTypes_e* ctypes, int count);

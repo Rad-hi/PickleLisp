@@ -95,6 +95,7 @@ struct Lval_t {
         char* sym;
         Lbuiltin_t builtin;
         void* dll;
+        ffi_type* ud_ffi_t;
     };
 
     /* Functions' stuff (along with builtin) */
