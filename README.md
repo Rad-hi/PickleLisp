@@ -12,6 +12,14 @@ I know nothing about LISPs, or functional programming. I found a book, and decid
 
 This language is not useful, and is here only for educational purposes.
 
+### Dependency
+
+For the REPL to have history, we use this library.
+
+```bash
+sudo apt install libedit-dev
+```
+
 ### Hello, World
 
 ```bash
