@@ -197,7 +197,7 @@ PUBLIC void lval_print(Lval_t* v) {
         case LVAL_QEXPR:      lval_expr_print(v, '{', '}'); break;
         case LVAL_EXIT:       printf("Exiting"); break;
         case LVAL_DLL:        printf("Dynamic library"); break;
-        case LVAL_TYPE:       printf("%s", CTYPE_2_NAME[v->c_type]); break;
+        case LVAL_TYPE:       printf("%s", ctype_2_str(v->c_type)); break;
         case LVAL_OK:         break;
         case LVAL_FN: {
             if (v->builtin != NULL) {
@@ -769,7 +769,7 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
         l_in_types[i] = lenv_get(e, fn->formals->cell[i]);
         bool okay = ret && l_in_types[i]->c_type == atypes[i];
         LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
-                              __func__, i + 1, CTYPE_2_NAME[atypes[i]], CTYPE_2_NAME[l_in_types[i]->c_type]);
+                              __func__, i + 1, ctype_2_str(atypes[i]), ctype_2_str(l_in_types[i]->c_type));
     }
 
     Lval_t* out = lenv_get(e, fn->body->cell[0]);
