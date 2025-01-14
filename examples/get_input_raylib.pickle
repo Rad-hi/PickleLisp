@@ -10,9 +10,6 @@
 ( extern raylib "SetTargetFPS" {Int} {Void} )
 ( extern raylib "GetTouchPosition" {Int} {Vector2});
 
-( def {ZOZINGRAY}   (list 22 22 22 255) )
-( def {PICKLEGREEN} (list 133 161 106 255) )
-
 ( def {FPS} 30 )
 ( def {title} "PcikleLisp RayLib Example - input" )
 ( def {win_width} 960 )
@@ -26,7 +23,12 @@
     {
         ( BeginDrawing {} )
 
-            ( print ( GetTouchPosition 0 ))
+            ( def {cur_pos} ( GetTouchPosition 0 ))
+            ( def {cur_x} ( st cur_pos ) )
+            ( def {cur_y} ( nd cur_pos ) )
+
+            ;; ( print cur_x cur_y )
+            ( print ( cast cur_x Int) ( cast cur_y Int ) )
 
         ( EndDrawing {} )
         ( loop func )
@@ -35,7 +37,6 @@
 
 
 ( InitWindow win_width win_height title )
-( ClearBackground ZOZINGRAY )
 ( SetTargetFPS FPS )
 ( loop WindowShouldClose)
 ( CloseWindow {} )
