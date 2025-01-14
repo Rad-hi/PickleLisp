@@ -37,7 +37,6 @@
                 { nil }
             )
 
-            ;; step x, and bound check. On every bound bounce, we change the color index randomly
             ( def {x} ( GetTouchX {} ) )
             ( def {y} ( GetTouchY {} ) )
 

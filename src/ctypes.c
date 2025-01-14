@@ -5,6 +5,7 @@ char* CTYPE_2_NAME[N_TYPES] = {
     "C_VOID",
     "C_CHAR",
     "C_INT",
+    "C_FLOAT",
     "C_DOUBLE",
     "C_STRING",
     "C_STRUCT",
@@ -15,6 +16,7 @@ ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
         case C_VOID:   return &ffi_type_void;
         case C_CHAR:   return &ffi_type_schar;
         case C_INT:    return &ffi_type_slong;
+        case C_FLOAT: return &ffi_type_float;
         case C_DOUBLE: return &ffi_type_double;
         case C_STRING: return &ffi_type_pointer;
         default:
@@ -28,6 +30,7 @@ char* ffi_type_2_str(ffi_type* t) {
     if (t == &ffi_type_void)        return "ffi_type_void";
     if (t == &ffi_type_schar)       return "ffi_type_schar";
     if (t == &ffi_type_slong)       return "ffi_type_slong";
+    if (t == &ffi_type_float)       return "ffi_type_float";
     if (t == &ffi_type_double)      return "ffi_type_double";
     if (t == &ffi_type_pointer)     return "ffi_type_pointer";
     if (t->type == FFI_TYPE_STRUCT) return "ffi_user_defined_type [struct]";
@@ -58,6 +61,7 @@ size_t sizeof_ctype(CTypes_e ctype) {
         case C_INT: return sizeof(long);
         case C_CHAR: return sizeof(char);
         case C_DOUBLE: return sizeof(double);
+        case C_FLOAT: return sizeof(float);
         case C_STRING: return sizeof(char*);
         case C_VOID: fprintf(stderr, "WHAT THE FUCK IS A VOID DOING AS INPUT?"); exit(69);
         default:
