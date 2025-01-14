@@ -1898,7 +1898,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 double x = (double)val->num.li;
                 lval_del(val);
                 lval_del(out_type);
-                return lval_create_long(x);
+                return lval_create_double(x);
             } else if (val->type == LVAL_STR) {
                 double x = 0;
                 sscanf(val->str, "%lf", &x);
