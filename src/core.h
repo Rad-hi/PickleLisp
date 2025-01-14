@@ -6,6 +6,7 @@
 #include <ffi.h>
 
 #include "config.h"
+#include "ctypes.h"
 #include "mpc.h"
 
 #define min(a, b) ((a) > (b) ? (b) : (a))
@@ -46,21 +47,10 @@ typedef struct Lenv_t Lenv_t;
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
 
 typedef struct {
-    char r;
-    char g;
-    char b;
-    char a;
-} Color_t;
-
-typedef enum {
-    C_VOID,
-    C_INT,
-    C_DOUBLE,
-    C_STRING,
-    C_COLOR,
-
-    N_TYPES,
-} CTypes_e;
+    char** names;
+    int* lengths;
+    int count;
+} Builtins_record_t;
 
 typedef enum {
     LVAL_INTEGER,
@@ -76,6 +66,7 @@ typedef enum {
     LVAL_TYPE,
     LVAL_EXIT,
     LVAL_OK,
+    LVAL_USER_TYPE,
 } LVAL_e;
 
 typedef union {
@@ -104,6 +95,7 @@ struct Lval_t {
         char* sym;
         Lbuiltin_t builtin;
         void* dll;
+        ffi_type* ud_ffi_t;  // describes a user-defined ffi_type [a struct]
     };
 
     /* Functions' stuff (along with builtin) */
@@ -116,6 +108,8 @@ struct Lval_t {
     ffi_type** atypes;
     bool is_extern;
     void* extern_ptr;
+
+    size_t ud_ffi_sz;  // the size of the entire user-defined type
 
     /* Expression */
     int count;

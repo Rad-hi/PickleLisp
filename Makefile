@@ -12,7 +12,7 @@ CFLAGS = -Wall -g
 LFLAGS = -ledit -lm -ldl -lffi
 
 INCLUDES = -I ./mpc -I ./libffi-3.4.6/include/
-SRCS = ./mpc/mpc.c ./src/core.c ./src/lang.c
+SRCS = ./mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 
 # define the C object files 
 #

@@ -6,3 +6,6 @@
 #define LANG_NAME       "PickleLisp"
 #define EXTENSION       ".pickle"       // pickle scripts extension
 #define STD_LIB_PATH    "./stdlib/std.pickle"
+
+#define PUBLIC          // Nothing -> just using it for the visual queue that something
+                        // will be used outside of the translation unit
