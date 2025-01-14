@@ -40,6 +40,7 @@ static Lval_t* builtin_error(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_print(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_read(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_type(Lenv_t* e, Lval_t* a);
+static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a);
 
 static Lval_t* builtin_dll(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_extern(Lenv_t* e, Lval_t* a);
@@ -282,6 +283,8 @@ PUBLIC void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "extern", builtin_extern);
     lenv_add_builtin(e, "mktype", builtin_mktype);
 
+    lenv_add_builtin(e, "cast",   builtin_cast);
+
     /* atoms */
     lenv_add_builtin_const(e, "ok",    lval_create_ok());
     lenv_add_builtin_const(e, "nil",   lval_create_qexpr());
@@ -296,6 +299,7 @@ PUBLIC void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin_const(e, "Float",  lval_create_float_type());
     lenv_add_builtin_const(e, "Double", lval_create_double_type());
     lenv_add_builtin_const(e, "String", lval_create_str_type());
+
 }
 
 /*
@@ -1852,4 +1856,96 @@ static Lval_t* builtin_mktype(Lenv_t* e, Lval_t* a) {
     lval_del(types);
 
     return lval_create_ok();
+}
+
+static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
+    LASSERT_NUM(__func__,  a, 2);
+    // a->cell[0] -- TODO: assert it's a convertible value
+    LASSERT_TYPE(__func__, a, 1, LVAL_TYPE);
+
+    Lval_t* val = lval_pop(a, 0);
+    Lval_t* out_type = lval_pop(a, 0);
+
+    switch (out_type->c_type) {
+        case C_CHAR:
+        case C_INT: {
+            if (val->type == LVAL_INTEGER || val->type == LVAL_BOOL) {
+                lval_del(out_type);
+                return val;
+            } else if (val->type == LVAL_DECIMAL) {
+                long x = (long)val->num.f;
+                lval_del(val);
+                lval_del(out_type);
+                return lval_create_long(x);
+            } else if (val->type == LVAL_STR) {
+                long x = strtol(val->str, NULL, 10);
+                lval_del(val);
+                lval_del(out_type);
+                return lval_create_long(x);
+            } else {
+                fprintf(stderr, "Couldn't convert supplied value to %s. %s.\n",
+                                ctype_2_str(out_type->c_type), __func__);
+                exit(69);
+            }
+        }
+
+        case C_DOUBLE:
+        case C_FLOAT: {
+            if (val->type == LVAL_DECIMAL) {
+                lval_del(out_type);
+                return val;
+            } else if (val->type == LVAL_INTEGER || val->type == LVAL_BOOL) {
+                double x = (double)val->num.li;
+                lval_del(val);
+                lval_del(out_type);
+                return lval_create_double(x);
+            } else if (val->type == LVAL_STR) {
+                double x = 0;
+                sscanf(val->str, "%lf", &x);
+                lval_del(val);
+                lval_del(out_type);
+                return lval_create_double(x);
+            } else {
+                fprintf(stderr, "Couldn't convert supplied value to %s. %s.\n",
+                                ctype_2_str(out_type->c_type), __func__);
+                exit(69);
+            }
+        }
+
+        case C_STRING: {
+            if (val->type == LVAL_INTEGER || val->type == LVAL_BOOL) {
+                long x = val->num.li;
+                size_t sz = snprintf(NULL, 0, "%li", x);
+                char* str = malloc(sz + 1);
+                snprintf(str, sz + 1, "%li", x);
+                Lval_t* ret = lval_create_str(str);
+                free(str);
+                lval_del(val);
+                lval_del(out_type);
+                return ret;
+            } else if (val->type == LVAL_DECIMAL) {
+                double x = val->num.f;
+                size_t sz = snprintf(NULL, 0, "%f", x);
+                char* str = malloc(sz + 1);
+                snprintf(str, sz + 1, "%f", x);
+                Lval_t* ret = lval_create_str(str);
+                free(str);
+                lval_del(val);
+                lval_del(out_type);
+                return ret;
+            } else if (val->type == LVAL_STR) {
+                lval_del(out_type);
+                return val;
+            } else {
+                fprintf(stderr, "Couldn't convert supplied value to %s. %s.\n",
+                                ctype_2_str(out_type->c_type), __func__);
+                exit(69);
+            }
+        }
+        default: {
+            // TODO: do we just wanna return the value as is, or do something about it
+            lval_del(out_type);
+            return val;
+        }
+    }
 }

@@ -17,6 +17,8 @@ typedef struct {
     char* fn;
 } test_statement_t;
 
+#define EXIT_ON_FAIL
+
 
 static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
     switch (expected.type) {
@@ -529,6 +531,60 @@ static void test_Conditional(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
+static void test_TypeCasting(mpc_parser_t* language, Lenv_t* e) {
+    test_statement_t tests[] = {
+        {
+            .name = "TypeCasting int Int",
+            .statement = "cast 69 Int",
+            .expected = get_lval_long(69)
+        },
+        {
+            .name = "TypeCasting float Int",
+            .statement = "cast 69.0 Int",
+            .expected = get_lval_long(69)
+        },
+        {
+            .name = "TypeCasting int Float",
+            .statement = "cast 69 Float",
+            .expected = get_lval_double(69.)
+        },
+        {
+            .name = "TypeCasting int String",
+            .statement = "cast 69 String",
+            .expected = get_lval_str("69")
+        },
+        {
+            .name = "TypeCasting float String",
+            .statement = "cast -.345 String",
+            .expected = get_lval_str("-0.345000")
+        },
+        {
+            .name = "TypeCasting float Char",
+            .statement = "cast .4 Char",
+            .expected = get_lval_long(0)
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
 /*
     NOTE: This test registers functions into the global environment
     be careful of using the same language instance after this test
@@ -691,6 +747,7 @@ int main(int argc, char** argv) {
     test_Builtin_Symbol_Redefinition_Error(language, e);
     test_Type_Inference(language, e);
     test_StdLib(language, e);
+    test_TypeCasting(language, e);
     test_fn(language, e);
 
     cleanup();
