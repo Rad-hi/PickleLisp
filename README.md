@@ -29,6 +29,19 @@ make clean && make
 ./PickleLisp examples/hello_world.pickle
 ```
 
+### ditch the ./PickleLisp hell
+
+If you want to just do ```PickleLisp example.pickle``` from anywhere you go, I suggest adding an alias to your `.bashrc` file:
+
+```bash
+nano ~/.bashrc
+# go to the bottom of the file, and add:
+alias PickleLisp='/PATH/TO/PICKLELISP/REPO/PickleLisp'
+```
+> don't forget to source the `.bashrc` in current terminal
+
+You might want to put PickleLisp in `/opt` or somewhere else where it wouldn't bother you.
+
 ### Tests
 
 I wrote tests myself without using any framework, so they're weirdly implemented, and are kinda hard to modify. But, they do the job.

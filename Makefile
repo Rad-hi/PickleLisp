@@ -8,7 +8,11 @@
 
 CC = cc
 
-CFLAGS = -Wall -g
+STD_LIB_PATH := $(CURDIR)
+STDLIB := /stdlib/std.pickle
+STD_LIB_PATH := $(STD_LIB_PATH)$(STDLIB)
+
+CFLAGS = -Wall -g -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
 LFLAGS = -ledit -lm -ldl -lffi
 
 INCLUDES = -I ./mpc -I ./libffi-3.4.6/include/
