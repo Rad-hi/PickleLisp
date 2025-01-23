@@ -610,7 +610,8 @@ static void* struct_from_list(Lval_t* vals, Lval_t* l_in_type) {
                 break;
             }
             case LVAL_DECIMAL: {
-                sz = sizeof_ctype(C_DOUBLE);
+                // TODO: differentiate between Double and Float
+                sz = sizeof_ctype(C_FLOAT);
                 memcpy((char*)data + offset, &vals->cell[i]->num.f, sz);
                 break;
             }
