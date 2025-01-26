@@ -738,7 +738,7 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, L
                 break;
             }
             case C_FLOAT: {
-                float x = (float)inputs->cell[i]->num.f;
+                float x = inputs->cell[i]->num.f;
                 avalues[i] = &x;
                 break;
             }

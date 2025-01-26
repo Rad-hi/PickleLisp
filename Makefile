@@ -10,8 +10,11 @@ CC = gcc
 
 STD_LIB_PATH := $(CURDIR)/stdlib/std.pickle
 
-CFLAGS = -Wall -Wextra -g -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\" #-DEXIT_ON_FAIL=0
-# CFLAGS += -O3  # do we really want to optimize ?
+CFLAGS = -Wall -Wextra -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
+CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
+CFLAGS += -g
+# CFLAGS += -O3
+
 
 LFLAGS = -ledit -lm -ldl -lffi
 
