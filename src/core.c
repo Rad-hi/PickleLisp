@@ -737,7 +737,11 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, L
                 avalues[i] = &inputs->cell[i]->num.li;
                 break;
             }
-            case C_FLOAT:
+            case C_FLOAT: {
+                float x = (float)inputs->cell[i]->num.f;
+                avalues[i] = &x;
+                break;
+            }
             case C_DOUBLE: {
                 avalues[i] = &inputs->cell[i]->num.f;
                 break;
@@ -794,17 +798,17 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
             return lval_create_long(ret);
         }
         case C_FLOAT: {
-            float ret = 0;
+            float ret = 0.0;
             ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_double(ret);
         }
         case C_DOUBLE: {
-            double ret = 0;
+            double ret = 0.0;
             ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_double(ret);
         }
         case C_STRING: {
-            char *ret;
+            char *ret = NULL;
             ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_str(ret);
         }
