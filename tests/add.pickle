@@ -1,0 +1,9 @@
+( dll "adder" "./tests/libadd.so" )
+
+( extern adder "add_2_ints" {Int Int} {Int} )
+( extern adder "add_3_ints" {Int Int Int} {Int} )
+( extern adder "add_2_floats" {Float Float} {Float} )
+( extern adder "add_3_floats" {Float Float Float} {Float} )
+( extern adder "add_2_doubles" {Double Double} {Double} )
+( extern adder "add_3_doubles" {Double Double Double} {Double} )
+( extern adder "add_int_float_double" {Int Float Double} {Double} )
