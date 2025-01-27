@@ -122,6 +122,7 @@ Lval_t* lval_read(mpc_ast_t* ast);
 Lenv_t* lenv_new(void);
 Lval_t* lval_add(Lval_t* v, Lval_t* x);
 Lval_t* lval_create_sexpr(void);
+Lval_t* lval_create_qexpr(void);
 Lval_t* lval_create_str(char* s);
 Lval_t* builtin_load(Lenv_t* e, Lval_t* a);
 void    lval_del(Lval_t* v);

@@ -11,6 +11,7 @@ typedef enum {
     C_VOID,
     C_CHAR,
     C_INT,
+    C_LONG,
     C_FLOAT,
     C_DOUBLE,
     C_STRING,

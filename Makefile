@@ -12,6 +12,7 @@ STD_LIB_PATH := $(CURDIR)/stdlib/std.pickle
 
 CFLAGS = -Wall -Wextra -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
 CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
+# CFLAGS += -DVERBOSE_ADD_  # for the add library to print its input
 CFLAGS += -g
 # CFLAGS += -O3
 

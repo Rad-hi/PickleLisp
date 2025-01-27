@@ -71,7 +71,6 @@ static Lval_t* lval_create_exit(void);
 static Lval_t* lval_create_bool(bool x);
 static Lval_t* lval_create_double(double x);
 static Lval_t* lval_create_long(long x);
-static Lval_t* lval_create_qexpr(void);
 static Lval_t* lval_create_err(char* fmt, ...);
 static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
@@ -80,6 +79,7 @@ static Lval_t* lval_create_dll(void* dll);
 static Lval_t* lval_create_str_type(void);
 static Lval_t* lval_create_double_type(void);
 static Lval_t* lval_create_int_type(void);
+static Lval_t* lval_create_long_type(void);
 static Lval_t* lval_create_char_type(void);
 static Lval_t* lval_create_float_type(void);
 static Lval_t* lval_create_void_type(void);
@@ -295,11 +295,11 @@ PUBLIC void lenv_add_builtins(Lenv_t* e) {
     /* types */
     lenv_add_builtin_const(e, "Void",   lval_create_void_type());
     lenv_add_builtin_const(e, "Int",    lval_create_int_type());
+    lenv_add_builtin_const(e, "Long",   lval_create_long_type());
     lenv_add_builtin_const(e, "Char",   lval_create_char_type());
     lenv_add_builtin_const(e, "Float",  lval_create_float_type());
     lenv_add_builtin_const(e, "Double", lval_create_double_type());
     lenv_add_builtin_const(e, "String", lval_create_str_type());
-
 }
 
 /*
@@ -336,6 +336,14 @@ PUBLIC Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
 PUBLIC Lval_t* lval_create_sexpr(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_SEXPR;
+    v->count = 0;
+    v->cell = NULL;
+    return v;
+}
+
+PUBLIC Lval_t* lval_create_qexpr(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_QEXPR;
     v->count = 0;
     v->cell = NULL;
     return v;
@@ -486,6 +494,13 @@ static Lval_t* lval_create_int_type(void) {
     return v;
 }
 
+static Lval_t* lval_create_long_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_LONG;
+    return v;
+}
+
 static Lval_t* lval_create_char_type(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_TYPE;
@@ -549,14 +564,6 @@ static Lval_t* lval_create_double(double x) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_DECIMAL;
     v->num.f = x;
-    return v;
-}
-
-static Lval_t* lval_create_qexpr(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
-    v->type = LVAL_QEXPR;
-    v->count = 0;
-    v->cell = NULL;
     return v;
 }
 
@@ -642,6 +649,12 @@ static Lval_t* user_defined_to_list(void* data, Lval_t* l_out_type) {
                 val = lval_create_long(x);
                 break;
             }
+            case C_LONG: {
+                long x = 0;
+                memcpy((char*)&x, data + offset, sz);
+                val = lval_create_long(x);
+                break;
+            }
             case C_CHAR: {
                 char x = 0;
                 memcpy((char*)&x, data + offset, sz);
@@ -682,8 +695,8 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret, CTypes_e expected_ct
     switch (input->type) {
         case LVAL_BOOL:
         case LVAL_INTEGER: {
-            *ret = C_INT;
-            return true;
+            *ret = expected_ctype;
+            return (expected_ctype == C_INT || expected_ctype == C_LONG);
         }
 
         case LVAL_DECIMAL: {
@@ -726,6 +739,8 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret, CTypes_e expected_ct
 
 static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, Lval_t* inputs, void* ret) {
     void *avalues[inputs->count];
+    int int_convesion_buf[inputs->count];
+    float float_convesion_buf[inputs->count];
     int to_free = -1;
     for (int i = 0; i < inputs->count; i++) {
         switch (atypes[i]) {
@@ -734,12 +749,17 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, L
                 break;
             }
             case C_INT: {
+                int_convesion_buf[i] = (int)inputs->cell[i]->num.li;
+                avalues[i] = int_convesion_buf + i;
+                break;
+            }
+            case C_LONG: {
                 avalues[i] = &inputs->cell[i]->num.li;
                 break;
             }
             case C_FLOAT: {
-                float x = inputs->cell[i]->num.f;
-                avalues[i] = &x;
+                float_convesion_buf[i] = (float)inputs->cell[i]->num.f;
+                avalues[i] = float_convesion_buf + i;
                 break;
             }
             case C_DOUBLE: {
@@ -793,6 +813,11 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
             return lval_create_ok();
         }
         case C_INT: {
+            int ret = 0;
+            ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
+            return lval_create_long(ret);
+        }
+        case C_LONG: {
             long ret = 0;
             ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_long(ret);
@@ -1896,6 +1921,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
 
     switch (out_type->c_type) {
         case C_CHAR:
+        case C_LONG:
         case C_INT: {
             if (val->type == LVAL_INTEGER || val->type == LVAL_BOOL) {
                 lval_del(out_type);

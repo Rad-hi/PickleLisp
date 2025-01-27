@@ -7,3 +7,9 @@
 ( extern adder "add_2_doubles" {Double Double} {Double} )
 ( extern adder "add_3_doubles" {Double Double Double} {Double} )
 ( extern adder "add_int_float_double" {Int Float Double} {Double} )
+
+( mktype "SumModDiv" {Int Int Int} )
+( extern adder "add_mod_div_int_int" {Int Int Int} {SumModDiv} )
+
+( extern adder "add_2_longs" {Long Long} {Long} )
+( extern adder "add_2_longs_str" {Long Long} {String} )
