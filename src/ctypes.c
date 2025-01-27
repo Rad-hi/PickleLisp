@@ -5,6 +5,7 @@ PUBLIC char* ctype_2_str(CTypes_e c_type) {
         case C_VOID: return "C_VOID";
         case C_CHAR: return "C_CHAR";
         case C_INT: return "C_INT";
+        case C_LONG: return "C_LONG";
         case C_FLOAT: return "C_FLOAT";
         case C_DOUBLE: return "C_DOUBLE";
         case C_STRING: return "C_STRING";
@@ -19,8 +20,9 @@ PUBLIC ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
     switch (c_type) {
         case C_VOID:   return &ffi_type_void;
         case C_CHAR:   return &ffi_type_schar;
-        case C_INT:    return &ffi_type_slong;
-        case C_FLOAT: return &ffi_type_float;
+        case C_INT:    return &ffi_type_sint;
+        case C_LONG:   return &ffi_type_slong;
+        case C_FLOAT:  return &ffi_type_float;
         case C_DOUBLE: return &ffi_type_double;
         case C_STRING: return &ffi_type_pointer;
         default:
@@ -33,6 +35,7 @@ PUBLIC ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
 PUBLIC char* ffi_type_2_str(ffi_type* t) {
     if (t == &ffi_type_void)        return "ffi_type_void";
     if (t == &ffi_type_schar)       return "ffi_type_schar";
+    if (t == &ffi_type_sint)        return "ffi_type_sint";
     if (t == &ffi_type_slong)       return "ffi_type_slong";
     if (t == &ffi_type_float)       return "ffi_type_float";
     if (t == &ffi_type_double)      return "ffi_type_double";
@@ -62,14 +65,17 @@ PUBLIC ffi_type* ffi_type_from_user_defined(CTypes_e* ctypes, int count) {
 
 PUBLIC size_t sizeof_ctype(CTypes_e ctype) {
     switch (ctype) {
-        case C_INT: return sizeof(long);
-        case C_CHAR: return sizeof(char);
+        case C_CHAR:   return sizeof(char);
+        case C_INT:    return sizeof(int);
+        case C_LONG:   return sizeof(long);
+        case C_FLOAT:  return sizeof(float);
         case C_DOUBLE: return sizeof(double);
-        case C_FLOAT: return sizeof(float);
         case C_STRING: return sizeof(char*);
-        case C_VOID: fprintf(stderr, "WHAT THE FUCK IS A VOID DOING AS INPUT?"); exit(69);
+        case C_VOID:
+            fprintf(stderr, "WHAT THE FUCK IS A VOID DOING AS INPUT?");
+            exit(69);
         default:
             fprintf(stderr, "You added a new C-type [%s], but forgot to add it to %s!\n", ctype_2_str(ctype), __func__);
-            assert(false);
+            exit(69);
     }
 }

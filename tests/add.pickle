@@ -1,0 +1,17 @@
+;; PickleLisp bindings to the add.c library
+
+( dll "adder" "./tests/libadd.so" )
+
+( extern adder "add_2_ints" {Int Int} {Int} )
+( extern adder "add_3_ints" {Int Int Int} {Int} )
+( extern adder "add_2_floats" {Float Float} {Float} )
+( extern adder "add_3_floats" {Float Float Float} {Float} )
+( extern adder "add_2_doubles" {Double Double} {Double} )
+( extern adder "add_3_doubles" {Double Double Double} {Double} )
+( extern adder "add_int_float_double" {Int Float Double} {Double} )
+
+( mktype "SumModDiv" {Int Int Int} )
+( extern adder "add_mod_div_int_int" {Int Int Int} {SumModDiv} )
+
+( extern adder "add_2_longs" {Long Long} {Long} )
+( extern adder "add_2_longs_str" {Long Long} {String} )

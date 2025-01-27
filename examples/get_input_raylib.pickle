@@ -1,6 +1,7 @@
 (dll "raylib" "./raylib-5.5_linux_amd64/lib/libraylib.so")
 
 ( mktype "Vector2" {Float Float} )
+( mktype "Color" {Char Char Char Char} )
 
 ( extern raylib "InitWindow" {Int Int String} {Void} )
 ( extern raylib "WindowShouldClose" {Void} {Int} )
@@ -8,12 +9,26 @@
 ( extern raylib "EndDrawing" {Void} {Void} )
 ( extern raylib "CloseWindow" {Void} {Void} )
 ( extern raylib "SetTargetFPS" {Int} {Void} )
-( extern raylib "GetTouchPosition" {Int} {Vector2});
+( extern raylib "GetTouchPosition" {Int} {Vector2})
+( extern raylib "ClearBackground" {Color} {Void} )
+( extern raylib "DrawText" {String Int Int Int Color} {Void} )
+
+( def {ZOZINGRAY}   (list 22 22 22 255) )
+( def {RAYWHITE}    (list 245 245 245 255) )
+( def {PICKLEGREEN} (list 133 161 106 255) )
 
 ( def {FPS} 30 )
 ( def {title} "PcikleLisp RayLib Example - input" )
 ( def {win_width} 960 )
 ( def {win_height} 480 )
+
+( def {font_sz} 28 )
+( def {msg} "Move your cursor inside the window!" )
+( def {msg_len} ( len msg ) )
+( def {viz_msg_len} (* (- msg_len 1) (/ font_sz 2)) )
+
+( def {x} (/ (- win_width viz_msg_len ) 2) )
+( def {y} (/ (- win_height font_sz) 2) )
 
 
 ( fn { loop func } {
@@ -22,13 +37,21 @@
     { nil }
     {
         ( BeginDrawing {} )
+            ( ClearBackground ZOZINGRAY )
+            ( DrawText msg x y font_sz RAYWHITE )
 
-            ( def {cur_pos} ( GetTouchPosition 0 ))
-            ( def {cur_x} ( st cur_pos ) )
-            ( def {cur_y} ( nd cur_pos ) )
+            (= {cur_pos} ( GetTouchPosition 0 ))  ;; this gives us back Floats
+            (= {cur_x} ( cast ( st cur_pos ) Int ) )
+            (= {cur_y} ( cast ( nd cur_pos ) Int ) )
 
-            ;; ( print cur_x cur_y )
-            ( print ( cast cur_x Int) ( cast cur_y Int ) )
+            (= {cur_x_str} ( cast cur_x String ))
+            (= {cur_y_str} ( cast cur_y String ))
+
+            (= {pad_x} (* font_sz (len cur_x_str)) )
+            (= {pad_y} 20 )
+
+            ( DrawText cur_x_str cur_x (+ cur_y pad_y) font_sz PICKLEGREEN )
+            ( DrawText cur_y_str (+ cur_x pad_x) (+ cur_y pad_y) font_sz PICKLEGREEN )
 
         ( EndDrawing {} )
         ( loop func )

@@ -15,9 +15,8 @@ typedef struct {
     char* statement;
     Lval_t expected;
     char* fn;
+    bool dont_eval;
 } test_statement_t;
-
-#define EXIT_ON_FAIL
 
 
 static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
@@ -63,10 +62,21 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
 #endif
             break;
         }
+        case LVAL_QEXPR: {
+            bool cond = val->type == LVAL_QEXPR;
+            for (int i = 0; i < val->count; ++i) {
+                cond &= val->cell[i]->num.li == expected.cell[i]->num.li;
+            }
+            PRINT_VERDICT(cond, test_name);
+#ifdef EXIT_ON_FAIL
+            if (!cond) exit(-1);
+#endif
+            break;
+        }
+
         case LVAL_TYPE:
         case LVAL_DLL:
         case LVAL_SEXPR:
-        case LVAL_QEXPR:
         case LVAL_SYM:
         case LVAL_FN:
         case LVAL_EXIT:
@@ -585,6 +595,109 @@ static void test_TypeCasting(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
+static void test_ExternDLL(mpc_parser_t* language, Lenv_t* e) {
+    // TODO: get_lval_list with VA_ARGS + type maybe ?
+    Lval_t* add_mod_div_int_int_expected = lval_create_qexpr();
+    Lval_t sum = get_lval_long(21);  // sum [14 7]
+    Lval_t mod = get_lval_long(1);  // mod [sum 5]
+    Lval_t div = get_lval_long(4);  // div [sum 5]
+    lval_add(add_mod_div_int_int_expected, &sum);
+    lval_add(add_mod_div_int_int_expected, &mod);
+    lval_add(add_mod_div_int_int_expected, &div);
+
+    test_statement_t tests[] = {
+        {
+            .name = "ExternDLL",
+            .statement = "load \"./tests/add.pickle\"",
+            .dont_eval = true,  // this just loads the library and registes the library bindings
+        },
+
+        // actual tests
+        {
+            .name = "ExternDLL `add_2_ints`",
+            .statement = "add_2_ints 2 3",
+            .expected = get_lval_long(5),
+        },
+        {
+            .name = "ExternDLL `add_2_ints` (1)",
+            .statement = "add_2_ints -2 3",
+            .expected = get_lval_long(1),
+        },
+        {
+            .name = "ExternDLL `add_3_ints`",
+            .statement = "add_3_ints -2 3 66669419",
+            .expected = get_lval_long(66669420),
+        },
+        {
+            .name = "ExternDLL `add_2_floats`",
+            .statement = "add_2_floats 2. 67.0001",
+            .expected = get_lval_double(69.0001),
+        },
+        {
+            .name = "ExternDLL `add_3_floats`",
+            .statement = "add_3_floats -1. 35.01 34.99",
+            .expected = get_lval_double(69.0),
+        },
+        {
+            .name = "ExternDLL `add_2_doubles`",
+            .statement = "add_2_doubles 35.01 33.99",
+            .expected = get_lval_double(69.0),
+        },
+        {
+            .name = "ExternDLL `add_3_doubles`",
+            .statement = "add_3_doubles -1. 35.01 34.99",
+            .expected = get_lval_double(69.0),
+        },
+        {
+            .name = "ExternDLL `add_int_float_double`",
+            .statement = "add_int_float_double 69 420.0 1000000000.0",
+            .expected = get_lval_double(1000000489.0),
+        },
+        {
+            .name = "ExternDLL `add_mod_div_int_int`",
+            .statement = "add_mod_div_int_int 14 7 5",
+            .expected = *add_mod_div_int_int_expected,
+        },
+        {
+            .name = "ExternDLL `add_2_longs`",
+            .statement = "add_2_longs 14 7",
+            .expected = get_lval_long(21),
+        },
+        {
+            .name = "ExternDLL `add_2_longs_str`",
+            .statement = "add_2_longs_str 14 7",
+            .expected = get_lval_str("(14 + 7) = 21"),
+        },
+
+        // keep this at the end
+        {.statement = "end"},
+    };
+
+    int i = 0;
+    while (strncmp(tests[i].statement, "end", 3) != 0) {
+
+        mpc_result_t r;
+        if (mpc_parse("test", tests[i].statement, language, &r)) {
+            Lval_t* res = lval_eval(e, lval_read(r.output));
+
+            if (tests[i].dont_eval) {
+                mpc_ast_delete(r.output);
+                i++;
+                continue;
+            }
+
+            assert_equal(res, tests[i].expected, tests[i].name);
+            mpc_ast_delete(r.output);
+        } else {
+            PRINT_VERDICT(false, tests[i].name);
+#ifdef EXIT_ON_FAIL
+            exit(1);
+#endif
+        }
+        i++;
+    }
+}
+
 /*
     NOTE: This test registers functions into the global environment
     be careful of using the same language instance after this test
@@ -710,7 +823,7 @@ static void test_NonNumber_err(mpc_parser_t* language, Lenv_t* e) {
 }
 
 static void test_syntax_err(mpc_parser_t* language, Lenv_t* e) {
-
+    (void)e;
     char* test_name = "syntax (testing mpc)";
     char* test_statement = "$";
 
@@ -725,7 +838,7 @@ static void test_syntax_err(mpc_parser_t* language, Lenv_t* e) {
     }
 }
 
-int main(int argc, char** argv) {
+int main() {
 
     mpc_parser_t* language = NULL;
     Lenv_t* e = NULL;
@@ -748,7 +861,10 @@ int main(int argc, char** argv) {
     test_Type_Inference(language, e);
     test_StdLib(language, e);
     test_TypeCasting(language, e);
-    test_fn(language, e);
+
+    // keep last since these tetst register functions into the language instance
+    test_ExternDLL(language, e);
+    test_fn(language, e); 
 
     cleanup();
     lenv_del(e);

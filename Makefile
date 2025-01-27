@@ -6,13 +6,17 @@
 # 'make clean'  removes all .o and executable files
 #
 
-CC = cc
+CC = gcc
 
-STD_LIB_PATH := $(CURDIR)
-STDLIB := /stdlib/std.pickle
-STD_LIB_PATH := $(STD_LIB_PATH)$(STDLIB)
+STD_LIB_PATH := $(CURDIR)/stdlib/std.pickle
 
-CFLAGS = -Wall -g -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
+CFLAGS = -Wall -Wextra -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
+CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
+# CFLAGS += -DVERBOSE_ADD_  # for the add library to print its input
+CFLAGS += -g
+# CFLAGS += -O3
+
+
 LFLAGS = -ledit -lm -ldl -lffi
 
 INCLUDES = -I ./mpc -I ./libffi-3.4.6/include/
@@ -28,35 +32,29 @@ SRCS = ./mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 #
 OBJS = $(SRCS:.c=.o)
 
-# define the executable file 
-#
 MAIN = PickleLisp
-
 TEST = test
+ADD_LIB = tests/libadd.so
 
-# -----------------------------------------------------------------
-# GENERIC PART (You can leave it as it is)
-# -----------------------------------------------------------------
-#
+
 .PHONY: clean
 
-all:    $(MAIN) $(TEST) 
-	@echo  Compiled \--\> \./$(MAIN)
-	@echo  Compiled \--\> \./$(TEST)
+all: $(MAIN) $(TEST)
+
 
 $(MAIN): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) ./src/pickle_lisp.c -o $(MAIN) $(OBJS) $(LFLAGS)
 
-$(TEST): ./tests/test.o
-	$(CC) $(CFLAGS) $(INCLUDES) ./tests/test.c -o $(TEST) $(OBJS) $(LFLAGS)
+$(TEST): $(ADD_LIB)
+	$(CC) $(CFLAGS) $(INCLUDES) ./tests/test.c -o $(TEST) $(OBJS) $(LFLAGS) -L./tests/ -l add
 
-# this is a suffix replacement rule for building .o's from .c's
-# it uses automatic variables $<: the name of the prerequisite of
-# the rule(a .c file) and $@: the name of the target of the rule (a .o file) 
-# (see the gnu make manual section about automatic variables)
-#
+$(ADD_LIB):
+	$(CC) $(CFLAGS) ./tests/add.c -c -fPIC -o ./tests/add.o
+	$(CC) $(CFLAGS) ./tests/add.o -shared -o ./$(ADD_LIB)
+
+
 .c.o:
 	$(CC) $(CFLAGS) $(INCLUDES) -c $<  -o $@
 
 clean:
-	$(RM) ./src/*.o ./tests/*.o *~ $(MAIN)
+	$(RM) ./src/*.o ./tests/*.o *~ $(MAIN) $(TEST) $(ADD_LIB)

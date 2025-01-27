@@ -71,7 +71,6 @@ static Lval_t* lval_create_exit(void);
 static Lval_t* lval_create_bool(bool x);
 static Lval_t* lval_create_double(double x);
 static Lval_t* lval_create_long(long x);
-static Lval_t* lval_create_qexpr(void);
 static Lval_t* lval_create_err(char* fmt, ...);
 static Lval_t* lval_create_sym(char* symbol);
 static Lval_t* lval_create_fn(Lbuiltin_t fn);
@@ -80,6 +79,7 @@ static Lval_t* lval_create_dll(void* dll);
 static Lval_t* lval_create_str_type(void);
 static Lval_t* lval_create_double_type(void);
 static Lval_t* lval_create_int_type(void);
+static Lval_t* lval_create_long_type(void);
 static Lval_t* lval_create_char_type(void);
 static Lval_t* lval_create_float_type(void);
 static Lval_t* lval_create_void_type(void);
@@ -295,11 +295,11 @@ PUBLIC void lenv_add_builtins(Lenv_t* e) {
     /* types */
     lenv_add_builtin_const(e, "Void",   lval_create_void_type());
     lenv_add_builtin_const(e, "Int",    lval_create_int_type());
+    lenv_add_builtin_const(e, "Long",   lval_create_long_type());
     lenv_add_builtin_const(e, "Char",   lval_create_char_type());
     lenv_add_builtin_const(e, "Float",  lval_create_float_type());
     lenv_add_builtin_const(e, "Double", lval_create_double_type());
     lenv_add_builtin_const(e, "String", lval_create_str_type());
-
 }
 
 /*
@@ -336,6 +336,14 @@ PUBLIC Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
 PUBLIC Lval_t* lval_create_sexpr(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_SEXPR;
+    v->count = 0;
+    v->cell = NULL;
+    return v;
+}
+
+PUBLIC Lval_t* lval_create_qexpr(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_QEXPR;
     v->count = 0;
     v->cell = NULL;
     return v;
@@ -486,6 +494,13 @@ static Lval_t* lval_create_int_type(void) {
     return v;
 }
 
+static Lval_t* lval_create_long_type(void) {
+    Lval_t* v = malloc(sizeof(Lval_t));
+    v->type = LVAL_TYPE;
+    v->c_type = C_LONG;
+    return v;
+}
+
 static Lval_t* lval_create_char_type(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_TYPE;
@@ -552,14 +567,6 @@ static Lval_t* lval_create_double(double x) {
     return v;
 }
 
-static Lval_t* lval_create_qexpr(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
-    v->type = LVAL_QEXPR;
-    v->count = 0;
-    v->cell = NULL;
-    return v;
-}
-
 static Lval_t* lval_read_long(mpc_ast_t* ast) {
     errno = 0;
     long x = strtol(ast->contents, NULL, 10);
@@ -602,21 +609,18 @@ static void* struct_from_list(Lval_t* vals, Lval_t* l_in_type) {
     size_t offset = 0;
     size_t sz = 0;
     for (int i = 0; i < vals->count; ++i) {
+        sz = sizeof_ctype(l_in_type->cell[i]->c_type);
         switch (vals->cell[i]->type) {
             case LVAL_BOOL:
             case LVAL_INTEGER: {
-                sz = sizeof_ctype(l_in_type->cell[i]->c_type);
                 memcpy((char*)data + offset, &vals->cell[i]->num.li, sz);
                 break;
             }
             case LVAL_DECIMAL: {
-                // TODO: differentiate between Double and Float
-                sz = sizeof_ctype(C_FLOAT);
                 memcpy((char*)data + offset, &vals->cell[i]->num.f, sz);
                 break;
             }
             case LVAL_STR: {
-                sz = sizeof_ctype(C_STRING);
                 memcpy((char*)data + offset, &vals->cell[i]->str, sz);
                 break;
             }
@@ -641,6 +645,12 @@ static Lval_t* user_defined_to_list(void* data, Lval_t* l_out_type) {
         switch (ctype) {
             case C_INT: {
                 int x = 0;
+                memcpy((char*)&x, data + offset, sz);
+                val = lval_create_long(x);
+                break;
+            }
+            case C_LONG: {
+                long x = 0;
                 memcpy((char*)&x, data + offset, sz);
                 val = lval_create_long(x);
                 break;
@@ -677,20 +687,23 @@ static Lval_t* user_defined_to_list(void* data, Lval_t* l_out_type) {
         lval_add(l, val);
         offset += sz;
     }
+    free(data);
     return l;
 }
 
-static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
+static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret, CTypes_e expected_ctype) {
     switch (input->type) {
         case LVAL_BOOL:
         case LVAL_INTEGER: {
-            *ret = C_INT;
-            return true;
+            *ret = expected_ctype;
+            return (expected_ctype == C_INT || expected_ctype == C_LONG);
         }
 
         case LVAL_DECIMAL: {
-            *ret = C_DOUBLE;
-            return true;
+            // NOTE: We don't differentiate between double and float in our language internally
+            // so we rely on the function definition to tell us what's the type exactly
+            *ret = expected_ctype;
+            return (expected_ctype == C_FLOAT || expected_ctype == C_DOUBLE);
         }
 
         case LVAL_STR: {
@@ -702,7 +715,7 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
             if (input->count == 0) {
                 *ret = C_VOID;
                 return true;
-            } else if (input->count > 0) {
+            } else {
                 *ret = C_STRUCT;
                 return true;
             }
@@ -712,6 +725,9 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
             if (input->count == 0) {
                 *ret = C_VOID;
                 return true;
+            } else {
+                fprintf(stderr, "[Syntax Error] - Non empty s-expression as input to a function is not allowed!");
+                exit(69);
             }
         }
 
@@ -723,6 +739,8 @@ static bool lval_type_2_ctype(Lval_t* input, CTypes_e* ret) {
 
 static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, Lval_t* inputs, void* ret) {
     void *avalues[inputs->count];
+    int int_convesion_buf[inputs->count];
+    float float_convesion_buf[inputs->count];
     int to_free = -1;
     for (int i = 0; i < inputs->count; i++) {
         switch (atypes[i]) {
@@ -731,7 +749,17 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, L
                 break;
             }
             case C_INT: {
+                int_convesion_buf[i] = (int)inputs->cell[i]->num.li;
+                avalues[i] = int_convesion_buf + i;
+                break;
+            }
+            case C_LONG: {
                 avalues[i] = &inputs->cell[i]->num.li;
+                break;
+            }
+            case C_FLOAT: {
+                float_convesion_buf[i] = (float)inputs->cell[i]->num.f;
+                avalues[i] = float_convesion_buf + i;
                 break;
             }
             case C_DOUBLE: {
@@ -770,8 +798,8 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
     CTypes_e atypes[n_given];
     Lval_t* l_in_types[n_given];
     for (int i = 0; i < n_given; ++i) {
-        bool ret = lval_type_2_ctype(inputs->cell[i], &atypes[i]);
         l_in_types[i] = lenv_get(e, fn->formals->cell[i]);
+        bool ret = lval_type_2_ctype(inputs->cell[i], &atypes[i], l_in_types[i]->c_type);
         bool okay = ret && l_in_types[i]->c_type == atypes[i];
         LASSERT(inputs, okay, "Extern func `%s` got input arg [%i] of type [%s], expected [%s]",
                               __func__, i + 1, ctype_2_str(atypes[i]), ctype_2_str(l_in_types[i]->c_type));
@@ -785,17 +813,27 @@ static Lval_t* lval_call_extern(Lenv_t* e, Lval_t* fn, Lval_t* inputs) {
             return lval_create_ok();
         }
         case C_INT: {
+            int ret = 0;
+            ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
+            return lval_create_long(ret);
+        }
+        case C_LONG: {
             long ret = 0;
             ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_long(ret);
         }
+        case C_FLOAT: {
+            float ret = 0.0;
+            ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
+            return lval_create_double(ret);
+        }
         case C_DOUBLE: {
-            double ret;
+            double ret = 0.0;
             ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_double(ret);
         }
         case C_STRING: {
-            char *ret;
+            char *ret = NULL;
             ffi_call_extern(fn, atypes, l_in_types, inputs, &ret);
             return lval_create_str(ret);
         }
@@ -909,6 +947,7 @@ static Lval_t* builtin_mod(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "%");
 static Lval_t* builtin_pow(Lenv_t* e, Lval_t* a) { return builtin_op(e, a, "^"); }
 
 static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
+    (void)e;
     for (int i = 0; i < a->count; ++i) {
         if (!IS_NUM(a, i)) {
             char* type = ltype_name(a->cell[i]->type);
@@ -996,6 +1035,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
 }
 
 static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT(a, a->count >= 2, "Function `%s` expects at least 2 arguments, got [%i]", __func__, a->count);
     for (int i = 0; i < a->count; ++i) {
         LASSERT(a, IS_NUM(a, i), "Function `%s` expects arguments of type Number,"
@@ -1026,6 +1066,7 @@ static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT(a, a->count >= 2, "Function `%s` expects at least 2 arguments, got [%i]", __func__, a->count);
     for (int i = 0; i < a->count; ++i) {
         LASSERT(a, IS_NUM(a, i), "Function `%s` expects arguments of type Number,"
@@ -1061,6 +1102,7 @@ static Lval_t* builtin_and(Lenv_t* e, Lval_t* a) { return builtin_ord(e, a, "&&"
 static Lval_t* builtin_or(Lenv_t* e, Lval_t* a)  { return builtin_ord(e, a, "||"); }
 
 static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
+    (void)e;
     LASSERT(a, a->count == 2, "Operator `%s` expects 2 arguments, got [%i]", op, a->count);
 
     Lval_t* x = a->cell[0];
@@ -1102,6 +1144,7 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
 }
 
 static Lval_t* builtin_not(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT_NUM(__func__, a, 1);
     if (a->cell[0]->type == LVAL_DECIMAL) {
         a->cell[0]->type = LVAL_BOOL;
@@ -1175,6 +1218,7 @@ static Lval_t* builtin_eq(Lenv_t* e, Lval_t* a) { return builtin_cmp(e, a, "==")
 static Lval_t* builtin_ne(Lenv_t* e, Lval_t* a) { return builtin_cmp(e, a, "!="); }
 
 static Lval_t* builtin_cmp(Lenv_t* e, Lval_t* a, char* op) {
+    (void)e;
     LASSERT_NUM(op, a, 2);
 
     bool res;
@@ -1208,6 +1252,7 @@ static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT_NUM(__func__, a, 1);
 
     Lval_t* v = a->cell[0];
@@ -1242,6 +1287,7 @@ static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT_NUM(__func__, a, 1);
 
     Lval_t* v = a->cell[0];
@@ -1275,6 +1321,7 @@ static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_list(Lenv_t* e, Lval_t* a) {
+    (void)e;
     a->type = LVAL_QEXPR;
     return a;
 }
@@ -1289,6 +1336,7 @@ static Lval_t* builtin_eval(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_join(Lenv_t* e, Lval_t* a) {
+    (void)e;
     for (int i = 0; i < a->count; ++i) {
         LASSERT(a, IS_ITERABLE(a, i),
         "Function `%s` expects arguments of type [%s, %s], "
@@ -1377,6 +1425,7 @@ static Lval_t* builtin_fn(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_lambda(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT_NUM(__func__, a, 2);
     LASSERT_TYPE(__func__, a, 0, LVAL_QEXPR);
     LASSERT_TYPE(__func__, a, 1, LVAL_QEXPR);
@@ -1575,7 +1624,7 @@ static void _register_builtin_name(char* name) {
 }
 
 static bool _lookup_builtin_name(char* name) {
-    const size_t l = strlen(name);
+    int l = strlen(name);
     for (int i = 0; i < __builtins__.count; ++i) {
         if (__builtins__.lengths[i] == l && strncmp(__builtins__.names[i], name, l) == 0) {
             return true;
@@ -1668,6 +1717,7 @@ static Lval_t* builtin_read(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_print(Lenv_t* e, Lval_t* a) {
+    (void)e;
     for (int i = 0; i < a->count; ++i) {
         lval_print(a->cell[i]);
         putchar(' ');
@@ -1678,6 +1728,7 @@ static Lval_t* builtin_print(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_error(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT_NUM(__func__, a, 1);
     LASSERT_TYPE(__func__, a, 0, LVAL_STR);
     Lval_t* err = lval_create_err(a->cell[0]->str);
@@ -1860,6 +1911,7 @@ static Lval_t* builtin_mktype(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
+    (void)e;
     LASSERT_NUM(__func__,  a, 2);
     // a->cell[0] -- TODO: assert it's a convertible value
     LASSERT_TYPE(__func__, a, 1, LVAL_TYPE);
@@ -1869,6 +1921,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
 
     switch (out_type->c_type) {
         case C_CHAR:
+        case C_LONG:
         case C_INT: {
             if (val->type == LVAL_INTEGER || val->type == LVAL_BOOL) {
                 lval_del(out_type);
