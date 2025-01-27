@@ -1,3 +1,5 @@
+;; PickleLisp bindings to the add.c library
+
 ( dll "adder" "./tests/libadd.so" )
 
 ( extern adder "add_2_ints" {Int Int} {Int} )

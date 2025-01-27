@@ -596,6 +596,7 @@ static void test_TypeCasting(mpc_parser_t* language, Lenv_t* e) {
 }
 
 static void test_ExternDLL(mpc_parser_t* language, Lenv_t* e) {
+    // TODO: get_lval_list with VA_ARGS + type maybe ?
     Lval_t* add_mod_div_int_int_expected = lval_create_qexpr();
     Lval_t sum = get_lval_long(21);  // sum [14 7]
     Lval_t mod = get_lval_long(1);  // mod [sum 5]
@@ -613,70 +614,59 @@ static void test_ExternDLL(mpc_parser_t* language, Lenv_t* e) {
 
         // actual tests
         {
-            .name = "ExternDLL add_2_ints",
+            .name = "ExternDLL `add_2_ints`",
             .statement = "add_2_ints 2 3",
             .expected = get_lval_long(5),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_2_ints (1)",
+            .name = "ExternDLL `add_2_ints` (1)",
             .statement = "add_2_ints -2 3",
             .expected = get_lval_long(1),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_3_ints",
+            .name = "ExternDLL `add_3_ints`",
             .statement = "add_3_ints -2 3 66669419",
             .expected = get_lval_long(66669420),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_2_floats",
+            .name = "ExternDLL `add_2_floats`",
             .statement = "add_2_floats 2. 67.0001",
             .expected = get_lval_double(69.0001),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_3_floats",
+            .name = "ExternDLL `add_3_floats`",
             .statement = "add_3_floats -1. 35.01 34.99",
             .expected = get_lval_double(69.0),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_2_doubles",
+            .name = "ExternDLL `add_2_doubles`",
             .statement = "add_2_doubles 35.01 33.99",
             .expected = get_lval_double(69.0),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_3_doubles",
+            .name = "ExternDLL `add_3_doubles`",
             .statement = "add_3_doubles -1. 35.01 34.99",
             .expected = get_lval_double(69.0),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_int_float_double",
+            .name = "ExternDLL `add_int_float_double`",
             .statement = "add_int_float_double 69 420.0 1000000000.0",
             .expected = get_lval_double(1000000489.0),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_mod_div_int_int",
+            .name = "ExternDLL `add_mod_div_int_int`",
             .statement = "add_mod_div_int_int 14 7 5",
             .expected = *add_mod_div_int_int_expected,
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_2_longs",
+            .name = "ExternDLL `add_2_longs`",
             .statement = "add_2_longs 14 7",
             .expected = get_lval_long(21),
-            .dont_eval = false,
         },
         {
-            .name = "ExternDLL add_2_longs_str",
+            .name = "ExternDLL `add_2_longs_str`",
             .statement = "add_2_longs_str 14 7",
             .expected = get_lval_str("(14 + 7) = 21"),
-            .dont_eval = false,
         },
 
         // keep this at the end
@@ -871,8 +861,10 @@ int main() {
     test_Type_Inference(language, e);
     test_StdLib(language, e);
     test_TypeCasting(language, e);
+
+    // keep last since these tetst register functions into the language instance
     test_ExternDLL(language, e);
-    test_fn(language, e);
+    test_fn(language, e); 
 
     cleanup();
     lenv_del(e);

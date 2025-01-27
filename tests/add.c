@@ -1,3 +1,8 @@
+/*
+    This is a dummy library that we compile to an .so as part of the test procedure
+    It has random funtionalities that aim at testing all the internals related to FFI
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 
