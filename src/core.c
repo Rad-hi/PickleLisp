@@ -609,15 +609,26 @@ static void* struct_from_list(Lval_t* vals, Lval_t* l_in_type) {
     size_t offset = 0;
     size_t sz = 0;
     for (int i = 0; i < vals->count; ++i) {
-        sz = sizeof_ctype(l_in_type->cell[i]->c_type);
+        CTypes_e ctype = l_in_type->cell[i]->c_type;
+        sz = sizeof_ctype(ctype);
         switch (vals->cell[i]->type) {
             case LVAL_BOOL:
             case LVAL_INTEGER: {
-                memcpy((char*)data + offset, &vals->cell[i]->num.li, sz);
+                if (ctype == C_INT) {
+                    int x = (int)vals->cell[i]->num.li;
+                    memcpy((char*)data + offset, &x, sz);
+                } else {
+                    memcpy((char*)data + offset, &vals->cell[i]->num.li, sz);
+                }
                 break;
             }
             case LVAL_DECIMAL: {
-                memcpy((char*)data + offset, &vals->cell[i]->num.f, sz);
+                if (ctype == C_FLOAT) {
+                    float x = (float)vals->cell[i]->num.f;
+                    memcpy((char*)data + offset, &x, sz);
+                } else {
+                    memcpy((char*)data + offset, &vals->cell[i]->num.f, sz);
+                }
                 break;
             }
             case LVAL_STR: {

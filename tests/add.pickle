@@ -15,3 +15,7 @@
 
 ( extern adder "add_2_longs" {Long Long} {Long} )
 ( extern adder "add_2_longs_str" {Long Long} {String} )
+
+( mktype "Vector2" {Float Float} )
+( extern adder "add_vector2_str" {Vector2} {String} )
+( extern adder "add_const_vector2" {Vector2 Float} {Vector2} )

@@ -65,7 +65,15 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
         case LVAL_QEXPR: {
             bool cond = val->type == LVAL_QEXPR;
             for (int i = 0; i < val->count; ++i) {
-                cond &= val->cell[i]->num.li == expected.cell[i]->num.li;
+                LVAL_e type = val->cell[i]->type; 
+                if (type == LVAL_INTEGER || type == LVAL_BOOL) {
+                    cond &= val->cell[i]->num.li == expected.cell[i]->num.li;
+                } else if (type == LVAL_DECIMAL) {
+                    cond &= ALMOST_EQ(val->cell[i]->num.f, expected.cell[i]->num.f);
+                } else {
+                    fprintf(stderr, "Unsupported type in the QEXPR equality assertion!");
+                    exit(69);
+                }
             }
             PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
@@ -605,6 +613,12 @@ static void test_ExternDLL(mpc_parser_t* language, Lenv_t* e) {
     lval_add(add_mod_div_int_int_expected, &mod);
     lval_add(add_mod_div_int_int_expected, &div);
 
+    Lval_t* add_const_vector2_expected = lval_create_qexpr();
+    Lval_t x = get_lval_double(5.9);
+    Lval_t y = get_lval_double(1.6);
+    lval_add(add_const_vector2_expected, &x);
+    lval_add(add_const_vector2_expected, &y);
+
     test_statement_t tests[] = {
         {
             .name = "ExternDLL",
@@ -668,6 +682,16 @@ static void test_ExternDLL(mpc_parser_t* language, Lenv_t* e) {
             .statement = "add_2_longs_str 14 7",
             .expected = get_lval_str("(14 + 7) = 21"),
         },
+        {
+            .name = "ExternDLL `add_vector2_str`",
+            .statement = "add_vector2_str (list 5.5 1.2)",
+            .expected = get_lval_str("(5.5 + 1.2) = 6.7"),
+        },
+        {
+            .name = "ExternDLL `add_const_vector2`",
+            .statement = "add_const_vector2 (list 5.5 1.2) .4",
+            .expected = *add_const_vector2_expected,
+        },
 
         // keep this at the end
         {.statement = "end"},
@@ -680,6 +704,7 @@ static void test_ExternDLL(mpc_parser_t* language, Lenv_t* e) {
         if (mpc_parse("test", tests[i].statement, language, &r)) {
             Lval_t* res = lval_eval(e, lval_read(r.output));
 
+            // lval_println(res);
             if (tests[i].dont_eval) {
                 mpc_ast_delete(r.output);
                 i++;

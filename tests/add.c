@@ -93,3 +93,29 @@ char* add_2_longs_str(long a, long b) {
     snprintf(buf, 1024, "(%li + %li) = %li", a, b, a + b);
     return buf;
 }
+
+
+typedef struct{
+    float x;
+    float y;
+} Vector2;
+
+
+char* add_vector2_str(Vector2 v) {
+#ifdef VERBOSE_ADD_
+    printf("[addlib]: add_2_longs_str: (%f, %f)\n", v.x, v.y);
+#endif // VERBOSE_ADD_
+    char* buf = malloc(1024);
+    snprintf(buf, 1024, "(%.1f + %.1f) = %.1f", v.x, v.y, v.x + v.y);
+    return buf;
+}
+
+Vector2 add_const_vector2(Vector2 v, float x) {
+#ifdef VERBOSE_ADD_
+    printf("[addlib]: add_const_vector2: (%f + %f, %f + %f)\n", v.x, x, v.y, x);
+#endif // VERBOSE_ADD_
+    return (Vector2){
+        .x = v.x + x,
+        .y = v.y + x,
+    };
+}
