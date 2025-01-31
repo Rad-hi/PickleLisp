@@ -11,30 +11,33 @@
 
 #define min(a, b) ((a) > (b) ? (b) : (a))
 #define max(a, b) ((a) > (b) ? (a) : (b))
+#define almost_eq(a, b) (fabs((a) - (b)) <= (EUPSILON))
 
-#define IS_NUM(a, idx)                    \
-    (a->cell[idx]->type == LVAL_INTEGER   \
-    || a->cell[idx]->type == LVAL_DECIMAL \
-    || a->cell[idx]->type == LVAL_BOOL)
+#define IS_NUM(a, idx)                      \
+   ((a)->cell[(idx)]->type == LVAL_INTEGER  \
+ || (a)->cell[(idx)]->type == LVAL_DECIMAL  \
+ || (a)->cell[(idx)]->type == LVAL_BOOL)
 
-#define IS_ITERABLE(a, idx) (a->cell[idx]->type == LVAL_QEXPR \
-                          || a->cell[idx]->type == LVAL_STR)
+#define IS_ITERABLE(a, idx)                \
+   ((a)->cell[(idx)]->type == LVAL_QEXPR   \
+ || (a)->cell[(idx)]->type == LVAL_STR)
 
-#define LASSERT(arg, cond, fmt, ...)                        \
+#define LASSERT(arg, cond, fmt, ...) do{                    \
     if (!(cond)) {                                          \
         Lval_t* err = lval_create_err(fmt, ##__VA_ARGS__);  \
         lval_del(arg);                                      \
         return  err;                                        \
-    }
+    }                                                       \
+} while(0)
 
-#define LASSERT_TYPE(fn, arg, idx, expect)                             \
-  LASSERT(arg, arg->cell[idx]->type == expect,                         \
-    "Function `%s` expects arg of type %s. Arg [%i] is of type %s.",   \
-    fn, ltype_name(expect), idx + 1, ltype_name(arg->cell[idx]->type))
+#define LASSERT_TYPE(fn, arg, idx, expect)                                   \
+  LASSERT(arg, (arg)->cell[(idx)]->type == expect,                           \
+    "Function `%s` expects arg of type %s. Arg [%i] is of type %s.",         \
+    fn, ltype_name(expect), (idx) + 1, ltype_name((arg)->cell[(idx)]->type))
 
-#define LASSERT_NUM(fn, arg, num)                                          \
-  LASSERT(arg, arg->count == num,                                          \
-    "Function `%s` expects [%i] arguments, got [%i]", fn, num, arg->count)
+#define LASSERT_NUM(fn, arg, num)                                                \
+  LASSERT((arg), (arg)->count == (num),                                          \
+    "Function `%s` expects [%i] arguments, got [%i]", (fn), (num), (arg)->count)
 
 /* the language defined in lang.h */
 extern mpc_parser_t* pickle_lisp;

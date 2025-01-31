@@ -114,7 +114,7 @@ static Builtins_record_t __builtins__ = {
   Recursively constructs the list of values (lval)
   based on theirs tags which are defined in lang.h
 */
-PUBLIC Lval_t* lval_read(mpc_ast_t* ast) {
+Lval_t* lval_read(mpc_ast_t* ast) {
     if      (strstr(ast->tag, "integer")) return lval_read_long(ast);
     else if (strstr(ast->tag, "decimal")) return lval_read_double(ast);
     else if (strstr(ast->tag, "string"))  return lval_read_str(ast);
@@ -142,7 +142,7 @@ PUBLIC Lval_t* lval_read(mpc_ast_t* ast) {
   Recursively deletes the list-value pointer as well as
   any children that were allocated on the heap
 */
-PUBLIC void lval_del(Lval_t* v) {
+void lval_del(Lval_t* v) {
     switch (v->type) {
         case LVAL_FN: {
             bool user_defined_fn = v->builtin == NULL;
@@ -185,7 +185,7 @@ PUBLIC void lval_del(Lval_t* v) {
     free(v);
 }
 
-PUBLIC void lval_print(Lval_t* v) {
+void lval_print(Lval_t* v) {
     switch (v->type) {
         case LVAL_INTEGER:    printf("%li", v->num.li); break;
         case LVAL_DECIMAL:    printf("%f", v->num.f); break;
@@ -218,12 +218,12 @@ PUBLIC void lval_print(Lval_t* v) {
     }
 }
 
-PUBLIC void lval_println(Lval_t* v) {
+void lval_println(Lval_t* v) {
     if (v->type == LVAL_OK) return;
     lval_print(v); printf("\n");
 }
 
-PUBLIC Lenv_t* lenv_new(void) {
+Lenv_t* lenv_new(void) {
     Lenv_t* e = malloc(sizeof(Lenv_t));
     e->parent = NULL;
     e->count = 0;
@@ -232,7 +232,7 @@ PUBLIC Lenv_t* lenv_new(void) {
     return e;
 }
 
-PUBLIC void lenv_del(Lenv_t* e) {
+void lenv_del(Lenv_t* e) {
     for (int i = 0; i < e->count; ++i) {
         free(e->syms[i]);
         lval_del(e->vals[i]);
@@ -245,7 +245,7 @@ PUBLIC void lenv_del(Lenv_t* e) {
 /*
     Register all builtins in the environment
 */
-PUBLIC void lenv_add_builtins(Lenv_t* e) {
+void lenv_add_builtins(Lenv_t* e) {
     lenv_add_builtin(e, "list",  builtin_list);
     lenv_add_builtin(e, "head",  builtin_head);
     lenv_add_builtin(e, "tail",  builtin_tail);
@@ -305,13 +305,13 @@ PUBLIC void lenv_add_builtins(Lenv_t* e) {
 /*
     registers all symbols in an environment as builtin names
 */
-PUBLIC void _register_builtin_names_from_env(Lenv_t* e) {
+void _register_builtin_names_from_env(Lenv_t* e) {
     for (int i = 0; i < e->count; ++i) {
         _register_builtin_name(e->syms[i]);
     }
 }
 
-PUBLIC void _del_builtin_names(void) {
+void _del_builtin_names(void) {
     for (int i = 0; i < __builtins__.count; ++i) {
         free(__builtins__.names[i]);
     }
@@ -323,7 +323,7 @@ PUBLIC void _del_builtin_names(void) {
   Recursively creates the list of symbolic expressions by
   calling `lval_eval_sexpr` which itself calls lval_eval
 */
-PUBLIC Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
+Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
     if (v->type == LVAL_SYM) {
         Lval_t* x = lenv_get(e, v);
         lval_del(v);
@@ -333,7 +333,7 @@ PUBLIC Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
     return v;
 }
 
-PUBLIC Lval_t* lval_create_sexpr(void) {
+Lval_t* lval_create_sexpr(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_SEXPR;
     v->count = 0;
@@ -341,7 +341,7 @@ PUBLIC Lval_t* lval_create_sexpr(void) {
     return v;
 }
 
-PUBLIC Lval_t* lval_create_qexpr(void) {
+Lval_t* lval_create_qexpr(void) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_QEXPR;
     v->count = 0;
@@ -349,7 +349,7 @@ PUBLIC Lval_t* lval_create_qexpr(void) {
     return v;
 }
 
-PUBLIC Lval_t* lval_create_str(char* s) {
+Lval_t* lval_create_str(char* s) {
     Lval_t* v = malloc(sizeof(Lval_t));
     v->type = LVAL_STR;
     v->str = malloc(strlen(s) + 1);
@@ -357,14 +357,14 @@ PUBLIC Lval_t* lval_create_str(char* s) {
     return v;
 }
 
-PUBLIC Lval_t* lval_add(Lval_t* v, Lval_t* x) {
+Lval_t* lval_add(Lval_t* v, Lval_t* x) {
     v->count++;
     v->cell = realloc(v->cell, sizeof(Lval_t*) * v->count);
     v->cell[v->count - 1] = x;
     return v;
 }
 
-PUBLIC Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
+Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM(__func__, a, 1);
     LASSERT_TYPE(__func__, a, 0, LVAL_STR);
 
@@ -996,7 +996,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
             else if (strncmp(op, "*", 2) == 0) x->num.f *= y->num.f;
             else if (strncmp(op, "^", 2) == 0) x->num.f = pow(x->num.f, y->num.f);
             else if (strncmp(op, "%", 2) == 0) {
-                if (y->num.f == 0.0) {
+                if (almost_eq(y->num.f, 0.0)) {
                     lval_del(x);
                     lval_del(y);
                     x = lval_create_err("Right-hand operand of '%s' cannot be 0!", op);
@@ -1005,7 +1005,7 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
                 x->num.f = fmod(x->num.f, y->num.f);
             }
             else if (strncmp(op, "/", 2) == 0) {
-                if (y->num.f == 0.0) {
+                if (almost_eq(y->num.f, 0.0)) {
                     lval_del(x);
                     lval_del(y);
                     x = lval_create_err("Division By Zero!");
@@ -1139,8 +1139,8 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
         else if (strncmp(op, "<", 2) == 0)  res->num.li = x->num.f < y->num.f;
         else if (strncmp(op, ">=", 3) == 0) res->num.li = x->num.f >= y->num.f;
         else if (strncmp(op, "<=", 3) == 0) res->num.li = x->num.f <= y->num.f;
-        else if (strncmp(op, "&&", 3) == 0) res->num.li = x->num.f && y->num.f;
-        else if (strncmp(op, "||", 3) == 0) res->num.li = x->num.f || y->num.f;
+        else if (strncmp(op, "&&", 3) == 0) res->num.li = !almost_eq(x->num.f, 0.0) && !almost_eq(y->num.f, 0.0);
+        else if (strncmp(op, "||", 3) == 0) res->num.li = !almost_eq(x->num.f, 0.0) || !almost_eq(y->num.f, 0.0);
     } else {
         if (strncmp(op, ">", 2) == 0)       res->num.li = x->num.li > y->num.li;
         else if (strncmp(op, "<", 2) == 0)  res->num.li = x->num.li < y->num.li;
@@ -1181,7 +1181,7 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
         case LVAL_BOOL:
         case LVAL_INTEGER:
             return x->num.li == y->num.li;
-        case LVAL_DECIMAL: return x->num.f == y->num.f;
+        case LVAL_DECIMAL: return almost_eq(x->num.f, y->num.f);
 
         case LVAL_STR: {
             int l1, l2;
@@ -1232,7 +1232,7 @@ static Lval_t* builtin_cmp(Lenv_t* e, Lval_t* a, char* op) {
     (void)e;
     LASSERT_NUM(op, a, 2);
 
-    bool res;
+    bool res = false;
     if (strncmp(op, "==", 3) == 0) res = lval_eq(a->cell[0], a->cell[1]);
     if (strncmp(op, "!=", 3) == 0) res = !lval_eq(a->cell[0], a->cell[1]);
 
@@ -1319,8 +1319,10 @@ static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
         }
         case LVAL_STR: {
             const size_t len = strlen(v->str);
-            strncpy(v->str, v->str + 1, len);
-            v->str = realloc(v->str, len);
+            char* temp = malloc(len * sizeof(char));
+            strncpy(temp, v->str + 1, len);
+            free(v->str);
+            v->str = temp;
             break;
         }
         default:
