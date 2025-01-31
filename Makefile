@@ -43,7 +43,7 @@ all: $(MAIN) $(TEST)
 $(MAIN): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) ./src/pickle_lisp.c -o $(MAIN) $(OBJS) $(LFLAGS)
 
-$(TEST): $(ADD_LIB)
+$(TEST): $(ADD_LIB) $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) ./tests/test.c -o $(TEST) $(OBJS) $(LFLAGS) -L./tests/ -l add
 
 $(ADD_LIB):
