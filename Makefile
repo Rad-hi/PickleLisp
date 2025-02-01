@@ -8,13 +8,19 @@
 
 CC = gcc
 
-STD_LIB_PATH := $(CURDIR)/stdlib/std.pickle
+CFLAGS = -std=c99
+CFLAGS += -Wall -Wextra -Wfloat-equal
+# CFLAGS += -Wwrite-strings
 
-CFLAGS = -Wall -Wextra -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
+STD_LIB_PATH := $(CURDIR)/stdlib/std.pickle
+CFLAGS += -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
+
+# CFLAGS += -ggdb
+CFLAGS += -O
+
+## flags for tests
 CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
 # CFLAGS += -DVERBOSE_ADD_  # for the add library to print its input
-CFLAGS += -g
-# CFLAGS += -O3
 
 
 LFLAGS = -ledit -lm -ldl -lffi
@@ -22,14 +28,6 @@ LFLAGS = -ledit -lm -ldl -lffi
 INCLUDES = -I ./mpc -I ./libffi-3.4.6/include/
 SRCS = ./mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 
-# define the C object files 
-#
-# This uses Suffix Replacement within a macro:
-#   $(name:string1=string2)
-#         For each word in 'name' replace 'string1' with 'string2'
-# Below we are replacing the suffix .c of all words in the macro SRCS
-# with the .o suffix
-#
 OBJS = $(SRCS:.c=.o)
 
 MAIN = PickleLisp
@@ -37,7 +35,7 @@ TEST = test
 ADD_LIB = tests/libadd.so
 
 
-.PHONY: clean
+.PHONY: clean, all
 
 all: $(MAIN) $(TEST)
 
@@ -45,7 +43,7 @@ all: $(MAIN) $(TEST)
 $(MAIN): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) ./src/pickle_lisp.c -o $(MAIN) $(OBJS) $(LFLAGS)
 
-$(TEST): $(ADD_LIB)
+$(TEST): $(ADD_LIB) $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES) ./tests/test.c -o $(TEST) $(OBJS) $(LFLAGS) -L./tests/ -l add
 
 $(ADD_LIB):

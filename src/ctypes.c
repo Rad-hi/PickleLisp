@@ -1,6 +1,6 @@
 #include "ctypes.h"
 
-PUBLIC char* ctype_2_str(CTypes_e c_type) {
+char* ctype_2_str(CTypes_e c_type) {
     switch (c_type) {
         case C_VOID: return "C_VOID";
         case C_CHAR: return "C_CHAR";
@@ -16,7 +16,7 @@ PUBLIC char* ctype_2_str(CTypes_e c_type) {
     exit(69);
 };
 
-PUBLIC ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
+ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
     switch (c_type) {
         case C_VOID:   return &ffi_type_void;
         case C_CHAR:   return &ffi_type_schar;
@@ -32,7 +32,7 @@ PUBLIC ffi_type* ctype_2_ffi_type(CTypes_e c_type) {
     }
 }
 
-PUBLIC char* ffi_type_2_str(ffi_type* t) {
+char* ffi_type_2_str(ffi_type* t) {
     if (t == &ffi_type_void)        return "ffi_type_void";
     if (t == &ffi_type_schar)       return "ffi_type_schar";
     if (t == &ffi_type_sint)        return "ffi_type_sint";
@@ -44,7 +44,7 @@ PUBLIC char* ffi_type_2_str(ffi_type* t) {
     return "unknown";
 }
 
-PUBLIC ffi_type* ffi_type_from_user_defined(CTypes_e* ctypes, int count) {
+ffi_type* ffi_type_from_user_defined(CTypes_e* ctypes, int count) {
     // Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
 
     int n_types = count;
@@ -63,7 +63,7 @@ PUBLIC ffi_type* ffi_type_from_user_defined(CTypes_e* ctypes, int count) {
     return type;
 }
 
-PUBLIC size_t sizeof_ctype(CTypes_e ctype) {
+size_t sizeof_ctype(CTypes_e ctype) {
     switch (ctype) {
         case C_CHAR:   return sizeof(char);
         case C_INT:    return sizeof(int);

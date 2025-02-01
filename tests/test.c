@@ -6,9 +6,7 @@
 #include "../src/lang.h"
 #include "../src/core.h"
 
-#define EUPSILON                    0.000001
-#define ALMOST_EQ(a, b)             fabs((a) - (b)) <= (EUPSILON)
-#define PRINT_VERDICT(cond, name)   printf("[%s] [Test %s]\n", (cond) ? "PASSED" : "FAILED", (name));
+#define PRINT_VERDICT(cond, name) (printf("[%s] [Test %s]\n", (cond) ? "PASSED" : "FAILED", (name)))
 
 typedef struct {
     char* name;
@@ -39,7 +37,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
             break;
         }
         case LVAL_DECIMAL: {
-            bool cond = ALMOST_EQ(val->num.f, expected.num.f); 
+            bool cond = almost_eq(val->num.f, expected.num.f); 
             PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
             if (!cond) exit(-1);
@@ -69,7 +67,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
                 if (type == LVAL_INTEGER || type == LVAL_BOOL) {
                     cond &= val->cell[i]->num.li == expected.cell[i]->num.li;
                 } else if (type == LVAL_DECIMAL) {
-                    cond &= ALMOST_EQ(val->cell[i]->num.f, expected.cell[i]->num.f);
+                    cond &= almost_eq(val->cell[i]->num.f, expected.cell[i]->num.f);
                 } else {
                     fprintf(stderr, "Unsupported type in the QEXPR equality assertion!");
                     exit(69);
