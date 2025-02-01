@@ -68,7 +68,8 @@ static mpc_parser_t* create_lang(void) {
 }
 
 static void load_std_library(Lenv_t* e) {
-    Lval_t* arg = lval_add(lval_create_sexpr(), lval_create_str(STD_LIB_PATH));
+    char* std_lib_path = STD_LIB_PATH EXTENSION;
+    Lval_t* arg = lval_add(lval_create_sexpr(), lval_create_str(std_lib_path));
     Lval_t* res = builtin_load(e, arg);
     if (res->type == LVAL_ERR) {
         lval_println(res);
@@ -77,7 +78,7 @@ static void load_std_library(Lenv_t* e) {
             strncpy(&cwd[0], "./", 3);
         }
         fprintf(stderr, "Cannot load the standard library. Did you change its location ?"
-                        "Expected location: %s/%s\n", cwd, STD_LIB_PATH);
+                        "Expected location: %s/%s\n", cwd, std_lib_path);
         exit(69);
     }
 }

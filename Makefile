@@ -12,7 +12,7 @@ CFLAGS = -std=c99
 CFLAGS += -Wall -Wextra -Wfloat-equal
 # CFLAGS += -Wwrite-strings
 
-STD_LIB_PATH := $(CURDIR)/stdlib/std.pickle
+STD_LIB_PATH := $(CURDIR)/stdlib/std  # extension is defined by the config of the language
 CFLAGS += -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
 
 # CFLAGS += -ggdb
@@ -30,7 +30,7 @@ SRCS = ./mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 
 OBJS = $(SRCS:.c=.o)
 
-MAIN = PickleLisp
+MAIN = pickle
 TEST = test
 ADD_LIB = tests/libadd.so
 

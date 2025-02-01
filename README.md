@@ -6,11 +6,11 @@ It started by following this book: https://www.buildyourownlisp.com/contents.
 
 Though, from the start, I followed a slightly different coding style, and kept adding features of my own here and there as I progressed through the book. Additionally, I added unit tests early on to help me move faster, and to ensure a more certain iterating process.
 
-### Brief
+### Disclaimers
 
-I know nothing about LISPs, or functional programming. I found a book, and decided I'd get better at C, while learning a bit about functional programming through writing a LISP.
+- This language is not useful, and is here only for educational purposes.
 
-This language is not useful, and is here only for educational purposes.
+- Prior to following this book, I knew nothing about LISPs, and I kinda still dunno, so don't expect this language to be a "proper" LISP.
 
 ### Dependency
 
@@ -24,19 +24,22 @@ sudo apt install libedit-dev
 
 ```bash
 cd PickleLisp
-make clean && make
+make clean && make  
+# or you can do `make -B`
 
-./PickleLisp examples/hello_world.pickle
+./pickle examples/hello_world.pkl
 ```
 
-### ditch the ./PickleLisp hell
+### "install" PickleLisp on your system (accessibility within any terminal)
 
-If you want to just do ```PickleLisp example.pickle``` from anywhere you go, I suggest adding an alias to your `.bashrc` file:
+If you want to just do ```pickle example.pkl``` from anywhere you go, I suggest adding an alias to your `.bashrc` file:
 
 ```bash
 nano ~/.bashrc
 # go to the bottom of the file, and add:
-alias PickleLisp='/PATH/TO/PICKLELISP/REPO/PickleLisp'
+alias pickle='/PATH/TO/PICKLELISP/PARENT/DIR/PickleLisp/pickle'
+
+# if it's under home, you can do: ~/PickleLisp/pickle
 ```
 > don't forget to source the `.bashrc` in current terminal
 
@@ -59,10 +62,8 @@ TODO
 
 ### References
 
-- [RayLib](https://github.com/raysan5/raylib/tree/master).
+- [RayLib: https://github.com/raysan5/raylib](https://github.com/raysan5/raylib/tree/master)
 
-- [libffi](https://github.com/libffi/libffi)
+- [libffi: https://github.com/libffi/libffi](https://github.com/libffi/libffi)
 
-- [libffi Docs](https://www.chiark.greenend.org.uk/doc/libffi-dev/html/The-Basics.html)
-
-- [Article about system calls](https://blog.packagecloud.io/the-definitive-guide-to-linux-system-calls/)
+- [libffi Docs: https://www.chiark.greenend.org.uk/doc/libffi-dev](https://www.chiark.greenend.org.uk/doc/libffi-dev/html/The-Basics.html)
