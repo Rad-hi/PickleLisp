@@ -12,7 +12,8 @@ CFLAGS = -std=c99
 CFLAGS += -Wall -Wextra -Wfloat-equal
 # CFLAGS += -Wwrite-strings
 
-STD_LIB_PATH := $(CURDIR)/stdlib/std  # extension is defined by the config of the language
+# extension is defined by the config of the language
+STD_LIB_PATH := $(CURDIR)/stdlib/std
 CFLAGS += -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
 
 # CFLAGS += -ggdb

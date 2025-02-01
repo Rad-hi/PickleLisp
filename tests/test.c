@@ -620,7 +620,7 @@ static void test_ExternDLL(mpc_parser_t* language, Lenv_t* e) {
     test_statement_t tests[] = {
         {
             .name = "ExternDLL",
-            .statement = "load \"./tests/add.pickle\"",
+            .statement = "load \"./tests/add.pkl\"",
             .dont_eval = true,  // this just loads the library and registes the library bindings
         },
 
