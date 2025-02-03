@@ -17,8 +17,12 @@ CFLAGS += -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion
 STD_LIB_PATH := $(CURDIR)/stdlib/std
 CFLAGS += -DSTD_LIB_PATH=\"$(STD_LIB_PATH)\"
 
-# CFLAGS += -ggdb
+CFLAGS += -ggdb
 CFLAGS += -O
+
+## gprof labels genration
+## Ref: https://blog.mattjustice.com/2020/11/24/gprof-profiler/
+# CFLAGS += -pg
 
 ## flags for tests
 CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
