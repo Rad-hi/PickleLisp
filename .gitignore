@@ -3,4 +3,4 @@
 pickle
 test
 *.so
-*.out
+*.out*
