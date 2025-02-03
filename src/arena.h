@@ -63,7 +63,9 @@ typedef struct  {
     size_t count;
 } Arena_Mark;
 
-#define REGION_DEFAULT_CAPACITY (8*1024)
+#ifndef REGION_DEFAULT_CAPACITY
+#   define REGION_DEFAULT_CAPACITY (8*1024)
+#endif // REGION_DEFAULT_CAPACITY
 
 Region *new_region(size_t capacity);
 void free_region(Region *r);

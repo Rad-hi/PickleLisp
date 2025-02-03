@@ -60,6 +60,15 @@ make clean && make
 
 TODO
 
+### Memory profiling with valgrind
+
+```bash
+valgrind --tool=massif ./pickle examples/hello_raylib.pkl
+# let it run for some time, then exit it [Esc]
+
+massif-visualizer massif.out.<X>  # X is whatever number the above command created
+```
+
 ### References
 
 - [RayLib: https://github.com/raysan5/raylib](https://github.com/raysan5/raylib/tree/master)

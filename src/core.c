@@ -1,5 +1,6 @@
 #include "core.h"
 
+#define REGION_DEFAULT_CAPACITY ARENA_SIZE_B
 #define ARENA_IMPLEMENTATION
 #include "arena.h"
 

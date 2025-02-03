@@ -12,7 +12,6 @@ static void load_std_library(Lenv_t* e);
     Creates the language instance and the storage environment for it
 */
 void create_vm(Lenv_t** e, mpc_parser_t** lang) {
-    aalloc(ARENA_SIZE_B);
     *lang = create_lang();
     *e = lenv_new();
     lenv_add_builtins(*e);
