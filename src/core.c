@@ -1,5 +1,8 @@
 #include "core.h"
 
+#define ARENA_IMPLEMENTATION
+#include "arena.h"
+
 static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op);
 static Lval_t* builtin_add(Lenv_t* e, Lval_t* a);
 static Lval_t* builtin_sub(Lenv_t* e, Lval_t* a);
@@ -94,6 +97,14 @@ static ffi_type* lval_2_ffi_type(Lval_t* input_type);
 static void*     struct_from_list(Lval_t* vals, Lval_t* l_in_types);
 static void      ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, Lval_t* inputs, void* ret);
 
+
+static Arena arena = {0};
+
+void afree(void* ptr) {
+    (void)ptr;
+    // arena_free(&arena);
+}
+
 /*
     Keep a record of all builtin names that exist in the language,
     to prohibit the user from overriding any of them
@@ -101,13 +112,26 @@ static void      ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_typ
 static void _register_builtin_name(char* name);
 static bool _lookup_builtin_name(char* name);
 
-// TODO: Change to a hash-map, so that runtime lookup is faster
-//       (though this being a contiguous array, maybe lookup is faster
-//       this way as long as the number of builtins is small)
+/*
+    Dynamic Arrays, @tsoding style
+*/
+typedef struct {
+    struct {
+        size_t count;
+        size_t capacity;
+        char** items;
+    } names;
+
+    struct {
+        size_t count;
+        size_t capacity;
+        int* items;
+    } lengths;
+} Builtins_record_t;
+
 static Builtins_record_t __builtins__ = {
-    .names = NULL,
-    .lengths = NULL,
-    .count = 0
+    .names = {},
+    .lengths = {},
 };
 
 /*
@@ -143,6 +167,7 @@ Lval_t* lval_read(mpc_ast_t* ast) {
   any children that were allocated on the heap
 */
 void lval_del(Lval_t* v) {
+    // TODO: mark the value as dead for when we implement the GC, it would be cleaned up
     switch (v->type) {
         case LVAL_FN: {
             bool user_defined_fn = v->builtin == NULL;
@@ -150,8 +175,8 @@ void lval_del(Lval_t* v) {
                 lenv_del(v->env);
                 lval_del(v->formals);
                 lval_del(v->body);
-                free(v->cif);
-                free(v->atypes);
+                afree(v->cif);
+                afree(v->atypes);
             }
             break;
         }
@@ -163,9 +188,9 @@ void lval_del(Lval_t* v) {
         case LVAL_INTEGER:
         case LVAL_DECIMAL: break;
 
-        case LVAL_STR: free(v->str); break;
-        case LVAL_ERR: free(v->err); break;
-        case LVAL_SYM: free(v->sym); break;
+        case LVAL_STR: afree(v->str); break;
+        case LVAL_ERR: afree(v->err); break;
+        case LVAL_SYM: afree(v->sym); break;
 
         case LVAL_DLL: dlclose(v->dll); break;
 
@@ -175,14 +200,14 @@ void lval_del(Lval_t* v) {
             for (int i = 0; i < v->count; ++i) {
                 lval_del(v->cell[i]);
             }
-            free(v->cell);
+            afree(v->cell);
             break;
         }
         default: 
             fprintf(stderr, "You added a new type, but forgot to add it to %s!\n", __func__);
             assert(false);
     }
-    free(v);
+    afree(v);
 }
 
 void lval_print(Lval_t* v) {
@@ -224,7 +249,7 @@ void lval_println(Lval_t* v) {
 }
 
 Lenv_t* lenv_new(void) {
-    Lenv_t* e = malloc(sizeof(Lenv_t));
+    Lenv_t* e = (Lenv_t*)arena_alloc(&arena, sizeof(Lenv_t));
     e->parent = NULL;
     e->count = 0;
     e->vals = NULL;
@@ -233,13 +258,14 @@ Lenv_t* lenv_new(void) {
 }
 
 void lenv_del(Lenv_t* e) {
-    for (int i = 0; i < e->count; ++i) {
-        free(e->syms[i]);
-        lval_del(e->vals[i]);
-    }
-    free(e->syms);
-    free(e->vals);
-    free(e);
+    (void)e;
+    // for (int i = 0; i < e->count; ++i) {
+    //     afree(e->syms[i]);
+    //     lval_del(e->vals[i]);
+    // }
+    // afree(e->syms);
+    // afree(e->vals);
+    // afree(e);
 }
 
 /*
@@ -312,11 +338,11 @@ void _register_builtin_names_from_env(Lenv_t* e) {
 }
 
 void _del_builtin_names(void) {
-    for (int i = 0; i < __builtins__.count; ++i) {
-        free(__builtins__.names[i]);
-    }
-    free(__builtins__.names);
-    free(__builtins__.lengths);
+    // for (int i = 0; i < __builtins__.count; ++i) {
+    //     afree(__builtins__.names[i]);
+    // }
+    // afree(__builtins__.names);
+    // afree(__builtins__.lengths);
 }
 
 /*
@@ -334,7 +360,7 @@ Lval_t* lval_eval(Lenv_t* e, Lval_t* v) {
 }
 
 Lval_t* lval_create_sexpr(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_SEXPR;
     v->count = 0;
     v->cell = NULL;
@@ -342,7 +368,7 @@ Lval_t* lval_create_sexpr(void) {
 }
 
 Lval_t* lval_create_qexpr(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_QEXPR;
     v->count = 0;
     v->cell = NULL;
@@ -350,16 +376,17 @@ Lval_t* lval_create_qexpr(void) {
 }
 
 Lval_t* lval_create_str(char* s) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_STR;
-    v->str = malloc(strlen(s) + 1);
-    strcpy(v->str, s);
+    v->str = arena_strdup(&arena, s);
     return v;
 }
 
 Lval_t* lval_add(Lval_t* v, Lval_t* x) {
+    size_t oldsz = sizeof(Lval_t*) * v->count;
     v->count++;
-    v->cell = realloc(v->cell, sizeof(Lval_t*) * v->count);
+    size_t newsz = sizeof(Lval_t*) * v->count;
+    v->cell = arena_realloc(&arena, v->cell, oldsz, newsz);
     v->cell[v->count - 1] = x;
     return v;
 }
@@ -394,7 +421,7 @@ Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
         mpc_err_delete(r.error);
 
         Lval_t* err = lval_create_err("Could not load library [%s]", err_msg);
-        free(err_msg);
+        afree(err_msg);
         lval_del(a);
 
         return err;
@@ -429,21 +456,21 @@ static Lval_t* lval_eval_sexpr(Lenv_t* e, Lval_t* v) {
 }
 
 static Lval_t* lval_create_lambda(Lval_t* formals, Lval_t* body) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_FN;
     v->builtin = NULL;
     v->env = lenv_new();
     v->formals = formals;
     v->body = body;
-    v->cif = malloc(sizeof(ffi_cif));
-    v->atypes = malloc(formals->count * sizeof(ffi_type*));
+    v->cif = (ffi_cif*)arena_alloc(&arena, sizeof(ffi_cif));
+    v->atypes = (ffi_type**)arena_alloc(&arena, formals->count * sizeof(ffi_type*));
     v->extern_ptr = NULL;
     v->is_extern = false;
     return v;
 }
 
 static Lval_t* lval_create_fn(Lbuiltin_t fn) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_FN;
     v->is_extern = false;
     v->builtin = fn;
@@ -451,86 +478,83 @@ static Lval_t* lval_create_fn(Lbuiltin_t fn) {
 }
 
 static Lval_t* lval_create_sym(char* symbol) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_SYM;
-    v->sym = malloc(strlen(symbol) + 1);
-    strcpy(v->sym, symbol);
+    v->sym = arena_strdup(&arena, symbol);
     return v;
 }
 
 static Lval_t* lval_create_err(char* fmt, ...) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_ERR;
 
     va_list va;
     va_start(va, fmt);
 
-    v->err = malloc(ERR_BUF_LEN);
+    v->err = (char*)arena_alloc(&arena, ERR_BUF_LEN);
     vsnprintf(v->err, ERR_BUF_LEN - 1, fmt, va);
-    v->err = realloc(v->err, strlen(v->err) + 1);
-
     va_end(va);
 
     return v;
 }
 
 static Lval_t* lval_create_ok(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_OK;
     return v;
 }
 
 static Lval_t* lval_create_void_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_TYPE;
     v->c_type = C_VOID;
     return v;
 }
 
 static Lval_t* lval_create_int_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_TYPE;
     v->c_type = C_INT;
     return v;
 }
 
 static Lval_t* lval_create_long_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_TYPE;
     v->c_type = C_LONG;
     return v;
 }
 
 static Lval_t* lval_create_char_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_TYPE;
     v->c_type = C_CHAR;
     return v;
 }
 
 static Lval_t* lval_create_float_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_TYPE;
     v->c_type = C_FLOAT;
     return v;
 }
 
 static Lval_t* lval_create_double_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_TYPE;
     v->c_type = C_DOUBLE;
     return v;
 }
 
 static Lval_t* lval_create_str_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_TYPE;
     v->c_type = C_STRING;
     return v;
 }
 
 static Lval_t* lval_create_user_defined_type(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_USER_TYPE;
     v->c_type = C_STRUCT;
     v->count = 0;
@@ -541,27 +565,27 @@ static Lval_t* lval_create_user_defined_type(void) {
 }
 
 static Lval_t* lval_create_exit(void) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_EXIT;
     return v;
 }
 
 static Lval_t* lval_create_bool(bool x) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_BOOL;
     v->num.li = x;
     return v;
 }
 
 static Lval_t* lval_create_long(long x) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_INTEGER;
     v->num.li = x;
     return v;
 }
 
 static Lval_t* lval_create_double(double x) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_DECIMAL;
     v->num.f = x;
     return v;
@@ -939,8 +963,10 @@ static Lval_t* lval_pop(Lval_t* v, int i) {
     assert(i < v->count && "Index provided to `pop` is out of bound");
     Lval_t* x = v->cell[i];
     memmove(&v->cell[i], &v->cell[i+1], sizeof(Lval_t*) * (v->count - i - 1));
+    size_t oldsz = sizeof(Lval_t*) * v->count;
     v->count--;
-    v->cell = realloc(v->cell, sizeof(Lval_t*) * v->count);
+    size_t newsz = sizeof(Lval_t*) * v->count;
+    v->cell = arena_realloc(&arena, v->cell, oldsz, newsz);
     return x;
 }
 
@@ -1285,7 +1311,7 @@ static Lval_t* builtin_head(Lenv_t* e, Lval_t* a) {
             break;
         }
         case LVAL_STR: {
-            v->str = realloc(v->str, 2);
+            // v->str = realloc(v->str, 2);
             v->str[1] = '\0';
             break;
         }
@@ -1318,11 +1344,7 @@ static Lval_t* builtin_tail(Lenv_t* e, Lval_t* a) {
             break;
         }
         case LVAL_STR: {
-            const size_t len = strlen(v->str);
-            char* temp = malloc(len * sizeof(char));
-            strncpy(temp, v->str + 1, len);
-            free(v->str);
-            v->str = temp;
+            v->str = arena_strdup(&arena, v->str + 1);
             break;
         }
         default:
@@ -1466,7 +1488,7 @@ static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
         case LVAL_STR: {
             const size_t l1 = strlen(x->str);
             const size_t l2 = strlen(y->str);
-            x->str = realloc(x->str, l1 + l2 + 1);
+            x->str = arena_realloc(&arena, x->str, l1, l1 + l2 + 1);
             strncpy(x->str + l1, y->str, l2 + 1);
             break;
         }
@@ -1479,7 +1501,7 @@ static Lval_t* lval_join(Lval_t* x, Lval_t* y) {
 }
 
 static Lval_t* lval_copy(Lval_t* v) {
-    Lval_t* x = malloc(sizeof(Lval_t));
+    Lval_t* x = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     x->type = v->type;
     x->c_type = v->c_type;
 
@@ -1491,10 +1513,10 @@ static Lval_t* lval_copy(Lval_t* v) {
                 x->builtin = v->builtin;
             } else {
                 x->builtin = NULL;
-                x->cif = malloc(sizeof(ffi_cif));
-                memcpy(x->cif, v->cif, sizeof(ffi_cif));
-                x->atypes = malloc(v->formals->count * sizeof(ffi_type*));
-                memcpy(x->atypes, v->atypes, v->formals->count * sizeof(ffi_type*));
+
+                x->cif = arena_memdup(&arena, v->cif, sizeof(ffi_cif));
+                x->atypes = arena_memdup(&arena, v->atypes, v->formals->count * sizeof(ffi_type*));
+
                 x->extern_ptr = v->extern_ptr;
                 x->env = lenv_copy(v->env);
                 x->formals = lval_copy(v->formals);
@@ -1510,36 +1532,26 @@ static Lval_t* lval_copy(Lval_t* v) {
         case LVAL_INTEGER:   x->num.li = v->num.li; break;
 
         case LVAL_STR: {
-            x->str = malloc(strlen(v->str) + 1);
-            strcpy(x->str, v->str);
+            x->str = arena_strdup(&arena, v->str);
             break;
         }
         case LVAL_ERR: {
-            x->err = malloc(strlen(v->err) + 1);
-            strcpy(x->err, v->err);
+            x->err = arena_strdup(&arena, v->err);
             break;
         }
         case LVAL_SYM: {
-            x->sym = malloc(strlen(v->sym) + 1);
-            strcpy(x->sym, v->sym);
+            x->sym = arena_strdup(&arena, v->sym);
             break;
         }
 
-        case LVAL_USER_TYPE: {
+        case LVAL_USER_TYPE:
             x->ud_ffi_t = v->ud_ffi_t;
             x->ud_ffi_sz = v->ud_ffi_sz;
-            x->count = v->count;
-            x->cell = malloc(sizeof(Lval_t*) * x->count);
-            for (int i = 0; i < x->count; ++i) {
-                x->cell[i] = lval_copy(v->cell[i]);
-            }
-            break;
-        }
 
         case LVAL_QEXPR:
         case LVAL_SEXPR: {
             x->count = v->count;
-            x->cell = malloc(sizeof(Lval_t*) * x->count);
+            x->cell = (Lval_t**)arena_alloc(&arena, sizeof(Lval_t*) * x->count);
             for (int i = 0; i < x->count; ++i) {
                 x->cell[i] = lval_copy(v->cell[i]);
             }
@@ -1599,26 +1611,28 @@ static void lenv_put(Lenv_t* e, Lval_t* k, Lval_t* v) {
         }
     }
 
+    size_t oldsz_vals = sizeof(Lval_t*) * e->count;
+    size_t oldsz_syms = sizeof(char*) * e->count;
     e->count++;
-    e->vals = realloc(e->vals, sizeof(Lval_t*) * e->count);
-    e->syms = realloc(e->syms, sizeof(char*) * e->count);
+    size_t newsz_vals = sizeof(Lval_t*) * e->count;
+    size_t newsz_syms = sizeof(char*) * e->count;
+    e->vals = arena_realloc(&arena, e->vals, oldsz_vals, newsz_vals);
+    e->syms = arena_realloc(&arena, e->syms, oldsz_syms, newsz_syms);
 
     e->vals[e->count - 1] = lval_copy(v);
-    e->syms[e->count - 1] = malloc(strlen(k->sym) + 1);
-    strcpy(e->syms[e->count - 1], k->sym);
+    e->syms[e->count - 1] = arena_strdup(&arena, k->sym);
 }
 
 static Lenv_t* lenv_copy(Lenv_t* e) {
-    Lenv_t* cpy = malloc(sizeof(Lenv_t));
+    Lenv_t* cpy = (Lenv_t*)arena_alloc(&arena, sizeof(Lenv_t));
     cpy->parent = e->parent;
     cpy->count = e->count;
-    cpy->syms = malloc(sizeof(char*) * cpy->count);
-    cpy->vals = malloc(sizeof(Lval_t*) * cpy->count);
+    cpy->syms = (char**)arena_alloc(&arena, sizeof(char*) * cpy->count);
+    cpy->vals = (Lval_t**)arena_alloc(&arena, sizeof(Lval_t*) * cpy->count);
 
     for (int i = 0; i < e->count; ++i) {
-        cpy->syms[i] = malloc(strlen(e->syms[i]) + 1);
-        strcpy(cpy->syms[i], e->syms[i]);
         cpy->vals[i] = lval_copy(e->vals[i]);
+        cpy->syms[i] = arena_strdup(&arena, e->syms[i]);
     }
     return cpy;
 }
@@ -1628,18 +1642,14 @@ static Lenv_t* lenv_copy(Lenv_t* e) {
 */
 static void _register_builtin_name(char* name) {
     size_t name_len = strlen(name);
-    __builtins__.count++;
-    __builtins__.lengths = realloc(__builtins__.lengths, sizeof(int*) * __builtins__.count);
-    __builtins__.lengths[__builtins__.count - 1] = name_len;
-    __builtins__.names = realloc(__builtins__.names, sizeof(char*) * __builtins__.count);
-    __builtins__.names[__builtins__.count - 1] = malloc(name_len + 1);
-    strcpy(__builtins__.names[__builtins__.count - 1], name);
+    arena_da_append(&arena, &__builtins__.names, name);
+    arena_da_append(&arena, &__builtins__.lengths, name_len);
 }
 
 static bool _lookup_builtin_name(char* name) {
     int l = strlen(name);
-    for (int i = 0; i < __builtins__.count; ++i) {
-        if (__builtins__.lengths[i] == l && strncmp(__builtins__.names[i], name, l) == 0) {
+    for (size_t i = 0; i < __builtins__.names.count; ++i) {
+        if (__builtins__.lengths.items[i] == l && strncmp(__builtins__.names.items[i], name, l) == 0) {
             return true;
         }
     }
@@ -1682,23 +1692,23 @@ static void lval_print_str(Lval_t* v) {
 }
 
 static char* freadline(FILE* fp, size_t size) {
-    char* str;
-    int ch;
+    char* str = NULL;
+    int ch = 0;
     size_t len = 0;
 
-    str = realloc(NULL, sizeof(*str) * size);
+    str = arena_alloc(&arena, sizeof(*str) * size);
     if(!str) return str;
 
     while(EOF != (ch = fgetc(fp)) && ch != '\n') {
         str[len++] = ch;
         if(len == size){
-            str = realloc(str, sizeof(*str) * (size *= 2));
+            str = arena_realloc(&arena, str, sizeof(*str) * size, sizeof(*str) * (size *= 2));
             if(!str) return str;
         }
     }
     str[len++] = '\0';
 
-    return realloc(str, sizeof(*str) * len);
+    return str;
 }
 
 static Lval_t* builtin_read(Lenv_t* e, Lval_t* a) {
@@ -1722,7 +1732,7 @@ static Lval_t* builtin_read(Lenv_t* e, Lval_t* a) {
     char* s = freadline(stdin, READ_BUF_LEN);
     if (s) {
         lenv_put(e, sym, lval_create_str(s));
-        free(s);
+        afree(s);
         return lval_create_ok();
     } else {
         return lval_create_err("Function `%s` coudn't read input string\n", __func__);
@@ -1788,7 +1798,7 @@ static Lval_t* builtin_type(Lenv_t* e, Lval_t* a) {
 }
 
 static Lval_t* lval_create_dll(void* dll) {
-    Lval_t* v = malloc(sizeof(Lval_t));
+    Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_DLL;
     v->dll = dll;
     return v;
@@ -1986,7 +1996,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 char* str = malloc(sz + 1);
                 snprintf(str, sz + 1, "%li", x);
                 Lval_t* ret = lval_create_str(str);
-                free(str);
+                afree(str);
                 lval_del(val);
                 lval_del(out_type);
                 return ret;
@@ -1996,7 +2006,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 char* str = malloc(sz + 1);
                 snprintf(str, sz + 1, "%f", x);
                 Lval_t* ret = lval_create_str(str);
-                free(str);
+                afree(str);
                 lval_del(val);
                 lval_del(out_type);
                 return ret;
