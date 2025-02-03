@@ -10,7 +10,8 @@ CC = gcc
 
 CFLAGS = -std=c99
 CFLAGS += -Wall -Wextra -Wfloat-equal
-# CFLAGS += -Wwrite-strings
+CFLAGS += -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion
+# CFLAGS +=  -Werror
 
 # extension is defined by the config of the language
 STD_LIB_PATH := $(CURDIR)/stdlib/std
