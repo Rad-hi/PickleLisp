@@ -890,5 +890,4 @@ int main() {
     test_fn(language, e); 
 
     cleanup();
-    lenv_del(e);
 }

@@ -97,14 +97,6 @@ static ffi_type* lval_2_ffi_type(Lval_t* input_type);
 static void*     struct_from_list(Lval_t* vals, Lval_t* l_in_types);
 static void      ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, Lval_t* inputs, void* ret);
 
-
-static Arena arena = {0};
-
-void afree(void* ptr) {
-    (void)ptr;
-    // arena_free(&arena);
-}
-
 /*
     Keep a record of all builtin names that exist in the language,
     to prohibit the user from overriding any of them
@@ -133,6 +125,23 @@ static Builtins_record_t __builtins__ = {
     .names = {},
     .lengths = {},
 };
+
+
+static Arena arena = {0};
+
+/*
+    Frees the arena
+*/
+void afree() {
+    arena_free(&arena);
+}
+
+/*
+    allocates a chunck of memory on the arena; used as an initializer
+*/
+void aalloc(size_t sz_bytes) {
+    arena_alloc(&arena, sz_bytes);
+}
 
 /*
   Recursively constructs the list of values (lval)
@@ -163,51 +172,10 @@ Lval_t* lval_read(mpc_ast_t* ast) {
 }
 
 /*
-  Recursively deletes the list-value pointer as well as
-  any children that were allocated on the heap
+  TODO: maybe use to mark for the GC to kick in once implemented
 */
 void lval_del(Lval_t* v) {
-    // TODO: mark the value as dead for when we implement the GC, it would be cleaned up
-    switch (v->type) {
-        case LVAL_FN: {
-            bool user_defined_fn = v->builtin == NULL;
-            if (user_defined_fn) {
-                lenv_del(v->env);
-                lval_del(v->formals);
-                lval_del(v->body);
-                afree(v->cif);
-                afree(v->atypes);
-            }
-            break;
-        }
-
-        case LVAL_OK:
-        case LVAL_EXIT:
-        case LVAL_BOOL:
-        case LVAL_TYPE:
-        case LVAL_INTEGER:
-        case LVAL_DECIMAL: break;
-
-        case LVAL_STR: afree(v->str); break;
-        case LVAL_ERR: afree(v->err); break;
-        case LVAL_SYM: afree(v->sym); break;
-
-        case LVAL_DLL: dlclose(v->dll); break;
-
-        case LVAL_USER_TYPE:
-        case LVAL_QEXPR:
-        case LVAL_SEXPR: {
-            for (int i = 0; i < v->count; ++i) {
-                lval_del(v->cell[i]);
-            }
-            afree(v->cell);
-            break;
-        }
-        default: 
-            fprintf(stderr, "You added a new type, but forgot to add it to %s!\n", __func__);
-            assert(false);
-    }
-    afree(v);
+    (void)v;
 }
 
 void lval_print(Lval_t* v) {
@@ -255,17 +223,6 @@ Lenv_t* lenv_new(void) {
     e->vals = NULL;
     e->syms = NULL;
     return e;
-}
-
-void lenv_del(Lenv_t* e) {
-    (void)e;
-    // for (int i = 0; i < e->count; ++i) {
-    //     afree(e->syms[i]);
-    //     lval_del(e->vals[i]);
-    // }
-    // afree(e->syms);
-    // afree(e->vals);
-    // afree(e);
 }
 
 /*
@@ -335,14 +292,6 @@ void _register_builtin_names_from_env(Lenv_t* e) {
     for (int i = 0; i < e->count; ++i) {
         _register_builtin_name(e->syms[i]);
     }
-}
-
-void _del_builtin_names(void) {
-    // for (int i = 0; i < __builtins__.count; ++i) {
-    //     afree(__builtins__.names[i]);
-    // }
-    // afree(__builtins__.names);
-    // afree(__builtins__.lengths);
 }
 
 /*
@@ -421,7 +370,7 @@ Lval_t* builtin_load(Lenv_t* e, Lval_t* a) {
         mpc_err_delete(r.error);
 
         Lval_t* err = lval_create_err("Could not load library [%s]", err_msg);
-        afree(err_msg);
+        free(err_msg);
         lval_del(a);
 
         return err;
@@ -1544,9 +1493,16 @@ static Lval_t* lval_copy(Lval_t* v) {
             break;
         }
 
-        case LVAL_USER_TYPE:
+        case LVAL_USER_TYPE: {
             x->ud_ffi_t = v->ud_ffi_t;
             x->ud_ffi_sz = v->ud_ffi_sz;
+            x->count = v->count;
+            x->cell = (Lval_t**)arena_alloc(&arena, sizeof(Lval_t*) * x->count);
+            for (int i = 0; i < x->count; ++i) {
+                x->cell[i] = lval_copy(v->cell[i]);
+            }
+            break;
+        }
 
         case LVAL_QEXPR:
         case LVAL_SEXPR: {
@@ -1683,15 +1639,18 @@ static char* ltype_name(LVAL_e t) {
     (from the user) after evaluating the escape sequences
 */
 static void lval_print_str(Lval_t* v) {
-    char* escaped = malloc(strlen(v->str) + 1);
+    Arena temp = {};
+    char* escaped = arena_alloc(&temp, strlen(v->str) + 1);
     strcpy(escaped, v->str);
 
     escaped = mpcf_escape(escaped);
     printf("\"%s\"", escaped);
-    free(escaped);
+    arena_free(&temp);
 }
 
 static char* freadline(FILE* fp, size_t size) {
+    assert(size);
+
     char* str = NULL;
     int ch = 0;
     size_t len = 0;
@@ -1702,7 +1661,8 @@ static char* freadline(FILE* fp, size_t size) {
     while(EOF != (ch = fgetc(fp)) && ch != '\n') {
         str[len++] = ch;
         if(len == size){
-            str = arena_realloc(&arena, str, sizeof(*str) * size, sizeof(*str) * (size *= 2));
+            str = arena_realloc(&arena, str, sizeof(*str) * size, sizeof(*str) * (size * 2));
+            size *= 2;
             if(!str) return str;
         }
     }
@@ -1732,7 +1692,6 @@ static Lval_t* builtin_read(Lenv_t* e, Lval_t* a) {
     char* s = freadline(stdin, READ_BUF_LEN);
     if (s) {
         lenv_put(e, sym, lval_create_str(s));
-        afree(s);
         return lval_create_ok();
     } else {
         return lval_create_err("Function `%s` coudn't read input string\n", __func__);
@@ -1996,7 +1955,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 char* str = malloc(sz + 1);
                 snprintf(str, sz + 1, "%li", x);
                 Lval_t* ret = lval_create_str(str);
-                afree(str);
+                free(str);
                 lval_del(val);
                 lval_del(out_type);
                 return ret;
@@ -2006,7 +1965,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 char* str = malloc(sz + 1);
                 snprintf(str, sz + 1, "%f", x);
                 Lval_t* ret = lval_create_str(str);
-                afree(str);
+                free(str);
                 lval_del(val);
                 lval_del(out_type);
                 return ret;

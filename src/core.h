@@ -114,9 +114,9 @@ struct Lval_t {
 };
 
 
+Lenv_t* lenv_new(void);
 Lval_t* lval_eval(Lenv_t* e, Lval_t* v);
 Lval_t* lval_read(mpc_ast_t* ast);
-Lenv_t* lenv_new(void);
 Lval_t* lval_add(Lval_t* v, Lval_t* x);
 Lval_t* lval_create_sexpr(void);
 Lval_t* lval_create_qexpr(void);
@@ -125,7 +125,7 @@ Lval_t* builtin_load(Lenv_t* e, Lval_t* a);
 void    lval_del(Lval_t* v);
 void    lval_print(Lval_t* v);
 void    lval_println(Lval_t* v);
-void    lenv_del(Lenv_t* e);
 void    lenv_add_builtins(Lenv_t* e);
 void    _register_builtin_names_from_env(Lenv_t* e);
-void    _del_builtin_names(void);
+void    afree(void);
+void    aalloc(size_t sz_bytes);

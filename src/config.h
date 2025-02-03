@@ -7,3 +7,4 @@
 #define REPL_IN         "8=> "
 #define EXTENSION       ".pkl"          // pickle scripts extension
 #define EUPSILON        1e-6            // precision of the equality assertion between doubles
+#define ARENA_SIZE_B    (10*1024*1024)  // [bytes] the initial size of the memory arena allocated by the language

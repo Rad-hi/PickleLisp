@@ -5,10 +5,6 @@ static mpc_parser_t* parsers[NUM_PARSERS];
 
 mpc_parser_t* pickle_lisp;
 
-// defined in core.c
-extern void _del_builtin_names();
-
-
 static mpc_parser_t* create_lang(void);
 static void load_std_library(Lenv_t* e);
 
@@ -16,6 +12,7 @@ static void load_std_library(Lenv_t* e);
     Creates the language instance and the storage environment for it
 */
 void create_vm(Lenv_t** e, mpc_parser_t** lang) {
+    aalloc(ARENA_SIZE_B);
     *lang = create_lang();
     *e = lenv_new();
     lenv_add_builtins(*e);
@@ -27,9 +24,8 @@ void cleanup(void) {
     for (int i = 0; i < NUM_PARSERS; ++i) {
         mpc_cleanup(1, parsers[i]);
     }
-    _del_builtin_names();
+    afree();
 }
-
 
 static mpc_parser_t* create_lang(void) {
     int i = 0;

@@ -71,7 +71,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    lenv_del(e);
     cleanup();
 
     return 0;
