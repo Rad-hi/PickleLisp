@@ -62,6 +62,11 @@ TODO
 
 ### Memory profiling with valgrind
 
+You might need to install:
+```bash
+sudo apt-get install massif-visualizer
+```
+
 ```bash
 valgrind --tool=massif ./pickle examples/hello_raylib.pkl
 # let it run for some time, then exit it [Esc]
