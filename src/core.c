@@ -180,9 +180,9 @@ void lval_del(Lval_t* v) {
 
 void lval_print(Lval_t* v) {
     switch (v->type) {
-        case LVAL_INTEGER:    printf("%li", v->num.li); break;
-        case LVAL_DECIMAL:    printf("%f", v->num.f); break;
-        case LVAL_BOOL:       printf("%s", v->num.li ? "true" : "false"); break;
+        case LVAL_INTEGER:    printf("%li", v->i); break;
+        case LVAL_DECIMAL:    printf("%f", v->f); break;
+        case LVAL_BOOL:       printf("%s", v->i ? "true" : "false"); break;
         case LVAL_ERR:        printf("[ERROR] %s", v->err); break;
         case LVAL_STR:        lval_print_str(v); break;
         case LVAL_SYM:        printf("%s", v->sym); break;
@@ -522,21 +522,21 @@ static Lval_t* lval_create_exit(void) {
 static Lval_t* lval_create_bool(bool x) {
     Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_BOOL;
-    v->num.li = x;
+    v->i = x;
     return v;
 }
 
 static Lval_t* lval_create_long(long x) {
     Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_INTEGER;
-    v->num.li = x;
+    v->i = x;
     return v;
 }
 
 static Lval_t* lval_create_double(double x) {
     Lval_t* v = (Lval_t*)arena_alloc(&arena, sizeof(Lval_t));
     v->type = LVAL_DECIMAL;
-    v->num.f = x;
+    v->f = x;
     return v;
 }
 
@@ -588,19 +588,19 @@ static void* struct_from_list(Lval_t* vals, Lval_t* l_in_type) {
             case LVAL_BOOL:
             case LVAL_INTEGER: {
                 if (ctype == C_INT) {
-                    int x = (int)vals->cell[i]->num.li;
+                    int x = (int)vals->cell[i]->i;
                     memcpy((char*)data + offset, &x, sz);
                 } else {
-                    memcpy((char*)data + offset, &vals->cell[i]->num.li, sz);
+                    memcpy((char*)data + offset, &vals->cell[i]->i, sz);
                 }
                 break;
             }
             case LVAL_DECIMAL: {
                 if (ctype == C_FLOAT) {
-                    float x = (float)vals->cell[i]->num.f;
+                    float x = (float)vals->cell[i]->f;
                     memcpy((char*)data + offset, &x, sz);
                 } else {
-                    memcpy((char*)data + offset, &vals->cell[i]->num.f, sz);
+                    memcpy((char*)data + offset, &vals->cell[i]->f, sz);
                 }
                 break;
             }
@@ -733,21 +733,21 @@ static void ffi_call_extern(Lval_t* fn, CTypes_e* atypes, Lval_t** l_in_types, L
                 break;
             }
             case C_INT: {
-                int_convesion_buf[i] = (int)inputs->cell[i]->num.li;
+                int_convesion_buf[i] = (int)inputs->cell[i]->i;
                 avalues[i] = int_convesion_buf + i;
                 break;
             }
             case C_LONG: {
-                avalues[i] = &inputs->cell[i]->num.li;
+                avalues[i] = &inputs->cell[i]->i;
                 break;
             }
             case C_FLOAT: {
-                float_convesion_buf[i] = (float)inputs->cell[i]->num.f;
+                float_convesion_buf[i] = (float)inputs->cell[i]->f;
                 avalues[i] = float_convesion_buf + i;
                 break;
             }
             case C_DOUBLE: {
-                avalues[i] = &inputs->cell[i]->num.f;
+                avalues[i] = &inputs->cell[i]->f;
                 break;
             }
             case C_STRING: {
@@ -948,8 +948,8 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
 
     // no arguments provided and `op` is `-` then perform negation
     if ((strncmp(op, "-", 2) == 0) && a->count == 0) {
-        if (x->type == LVAL_INTEGER) x->num.li = -x->num.li;
-        else if (x->type == LVAL_DECIMAL) x->num.f = -x->num.f;
+        if (x->type == LVAL_INTEGER) x->i = -x->i;
+        else if (x->type == LVAL_DECIMAL) x->f = -x->f;
     }
 
     while (a->count > 0) {
@@ -960,56 +960,56 @@ static Lval_t* builtin_op(Lenv_t* e, Lval_t* a, char* op) {
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
             if (y->type != LVAL_DECIMAL) {
                 y->type = LVAL_DECIMAL; 
-                y->num.f = (double)y->num.li;
+                y->f = (double)y->i;
             } else if (x->type != LVAL_DECIMAL) {
                 x->type = LVAL_DECIMAL;
-                x->num.f = (double)x->num.li;
+                x->f = (double)x->i;
             }
 
-            if      (strncmp(op, "+", 2) == 0) x->num.f += y->num.f;
-            else if (strncmp(op, "-", 2) == 0) x->num.f -= y->num.f;
-            else if (strncmp(op, "*", 2) == 0) x->num.f *= y->num.f;
-            else if (strncmp(op, "^", 2) == 0) x->num.f = pow(x->num.f, y->num.f);
+            if      (strncmp(op, "+", 2) == 0) x->f += y->f;
+            else if (strncmp(op, "-", 2) == 0) x->f -= y->f;
+            else if (strncmp(op, "*", 2) == 0) x->f *= y->f;
+            else if (strncmp(op, "^", 2) == 0) x->f = pow(x->f, y->f);
             else if (strncmp(op, "%", 2) == 0) {
-                if (almost_eq(y->num.f, 0.0)) {
+                if (almost_eq(y->f, 0.0)) {
                     lval_del(x);
                     lval_del(y);
                     x = lval_create_err("Right-hand operand of '%s' cannot be 0!", op);
                     break;
                 }
-                x->num.f = fmod(x->num.f, y->num.f);
+                x->f = fmod(x->f, y->f);
             }
             else if (strncmp(op, "/", 2) == 0) {
-                if (almost_eq(y->num.f, 0.0)) {
+                if (almost_eq(y->f, 0.0)) {
                     lval_del(x);
                     lval_del(y);
                     x = lval_create_err("Division By Zero!");
                     break;
                 }
-                x->num.f /= y->num.f;
+                x->f /= y->f;
             }
         } else {
-            if      (strncmp(op, "+", 2) == 0) x->num.li += y->num.li;
-            else if (strncmp(op, "-", 2) == 0) x->num.li -= y->num.li;
-            else if (strncmp(op, "*", 2) == 0) x->num.li *= y->num.li;
-            else if (strncmp(op, "^", 2) == 0) x->num.li = (long)pow(x->num.li, y->num.li);
+            if      (strncmp(op, "+", 2) == 0) x->i += y->i;
+            else if (strncmp(op, "-", 2) == 0) x->i -= y->i;
+            else if (strncmp(op, "*", 2) == 0) x->i *= y->i;
+            else if (strncmp(op, "^", 2) == 0) x->i = (long)pow(x->i, y->i);
             else if (strncmp(op, "%", 2) == 0) {
-                if (y->num.li == 0) {
+                if (y->i == 0) {
                     lval_del(x);
                     lval_del(y);
                     x = lval_create_err("Right-hand operand of '%s' cannot be 0!", op);
                     break;
                 }
-                x->num.li %= y->num.li;
+                x->i %= y->i;
             }
             else if (strncmp(op, "/", 2) == 0) {
-                if (y->num.li == 0) {
+                if (y->i == 0) {
                     lval_del(x);
                     lval_del(y);
                     x = lval_create_err("Division By Zero!");
                     break;
                 }
-                x->num.li /= y->num.li;
+                x->i /= y->i;
             }
         }
 
@@ -1036,14 +1036,14 @@ static Lval_t* builtin_min(Lenv_t* e, Lval_t* a) {
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
             if (y->type != LVAL_DECIMAL) {
                 y->type = LVAL_DECIMAL;
-                y->num.f = (double)y->num.li;
+                y->f = (double)y->i;
             } else if (x->type != LVAL_DECIMAL) {
                 x->type = LVAL_DECIMAL;
-                x->num.f = (double)x->num.li;
+                x->f = (double)x->i;
             }
-            x->num.f = fmin(x->num.f, y->num.f);  
+            x->f = fmin(x->f, y->f);  
         } else {
-            x->num.li = min(x->num.li, y->num.li);  
+            x->i = min(x->i, y->i);  
         }
     }
 
@@ -1066,13 +1066,13 @@ static Lval_t* builtin_max(Lenv_t* e, Lval_t* a) {
 
         if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
             if (x->type == LVAL_DECIMAL && y->type != LVAL_DECIMAL) {
-                y->type = LVAL_DECIMAL; y->num.f = (double)y->num.li;
+                y->type = LVAL_DECIMAL; y->f = (double)y->i;
             } else if (x->type != LVAL_DECIMAL && y->type == LVAL_DECIMAL) {
-                x->type = LVAL_DECIMAL; x->num.f = (double)x->num.li;
+                x->type = LVAL_DECIMAL; x->f = (double)x->i;
             }
-            x->num.f = fmax(x->num.f, y->num.f);  
+            x->f = fmax(x->f, y->f);  
         } else {
-            x->num.li = max(x->num.li, y->num.li);  
+            x->i = max(x->i, y->i);  
         }
     }
 
@@ -1105,24 +1105,24 @@ static Lval_t* builtin_ord(Lenv_t* e, Lval_t* a, char* op) {
     if (x->type == LVAL_DECIMAL || y->type == LVAL_DECIMAL) {
         if (y->type != LVAL_DECIMAL) {
             y->type = LVAL_DECIMAL;
-            y->num.f = (double)y->num.li;
+            y->f = (double)y->i;
         } else if (x->type != LVAL_DECIMAL) {
             x->type = LVAL_DECIMAL;
-            x->num.f = (double)x->num.li;
+            x->f = (double)x->i;
         }
-        if (strncmp(op, ">", 2) == 0)       res->num.li = x->num.f > y->num.f;
-        else if (strncmp(op, "<", 2) == 0)  res->num.li = x->num.f < y->num.f;
-        else if (strncmp(op, ">=", 3) == 0) res->num.li = x->num.f >= y->num.f;
-        else if (strncmp(op, "<=", 3) == 0) res->num.li = x->num.f <= y->num.f;
-        else if (strncmp(op, "&&", 3) == 0) res->num.li = !almost_eq(x->num.f, 0.0) && !almost_eq(y->num.f, 0.0);
-        else if (strncmp(op, "||", 3) == 0) res->num.li = !almost_eq(x->num.f, 0.0) || !almost_eq(y->num.f, 0.0);
+        if (strncmp(op, ">", 2) == 0)       res->i = x->f > y->f;
+        else if (strncmp(op, "<", 2) == 0)  res->i = x->f < y->f;
+        else if (strncmp(op, ">=", 3) == 0) res->i = x->f >= y->f;
+        else if (strncmp(op, "<=", 3) == 0) res->i = x->f <= y->f;
+        else if (strncmp(op, "&&", 3) == 0) res->i = !almost_eq(x->f, 0.0) && !almost_eq(y->f, 0.0);
+        else if (strncmp(op, "||", 3) == 0) res->i = !almost_eq(x->f, 0.0) || !almost_eq(y->f, 0.0);
     } else {
-        if (strncmp(op, ">", 2) == 0)       res->num.li = x->num.li > y->num.li;
-        else if (strncmp(op, "<", 2) == 0)  res->num.li = x->num.li < y->num.li;
-        else if (strncmp(op, ">=", 3) == 0) res->num.li = x->num.li >= y->num.li;
-        else if (strncmp(op, "<=", 3) == 0) res->num.li = x->num.li <= y->num.li;
-        else if (strncmp(op, "&&", 3) == 0) res->num.li = x->num.li && y->num.li;
-        else if (strncmp(op, "||", 3) == 0) res->num.li = x->num.li || y->num.li;
+        if (strncmp(op, ">", 2) == 0)       res->i = x->i > y->i;
+        else if (strncmp(op, "<", 2) == 0)  res->i = x->i < y->i;
+        else if (strncmp(op, ">=", 3) == 0) res->i = x->i >= y->i;
+        else if (strncmp(op, "<=", 3) == 0) res->i = x->i <= y->i;
+        else if (strncmp(op, "&&", 3) == 0) res->i = x->i && y->i;
+        else if (strncmp(op, "||", 3) == 0) res->i = x->i || y->i;
     }
 
     lval_del(a);
@@ -1134,14 +1134,14 @@ static Lval_t* builtin_not(Lenv_t* e, Lval_t* a) {
     LASSERT_NUM(__func__, a, 1);
     if (a->cell[0]->type == LVAL_DECIMAL) {
         a->cell[0]->type = LVAL_BOOL;
-        a->cell[0]->num.li = (long)a->cell[0]->num.f;
+        a->cell[0]->i = (long)a->cell[0]->f;
     } else if (a->cell[0]->type == LVAL_INTEGER) {
         a->cell[0]->type = LVAL_BOOL;
-        a->cell[0]->num.li = (long)a->cell[0]->num.li;
+        a->cell[0]->i = (long)a->cell[0]->i;
     }
     LASSERT_TYPE(__func__, a, 0, LVAL_BOOL);
 
-    bool res = !(bool)(a->cell[0]->num.li);
+    bool res = !(bool)(a->cell[0]->i);
     lval_del(a);
     return lval_create_bool(res);
 }
@@ -1155,8 +1155,8 @@ static int lval_eq(Lval_t* x, Lval_t* y) {
     switch (x->type) {
         case LVAL_BOOL:
         case LVAL_INTEGER:
-            return x->num.li == y->num.li;
-        case LVAL_DECIMAL: return almost_eq(x->num.f, y->num.f);
+            return x->i == y->i;
+        case LVAL_DECIMAL: return almost_eq(x->f, y->f);
 
         case LVAL_STR: {
             int l1, l2;
@@ -1220,7 +1220,7 @@ static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
 
     if (a->cell[0]->type == LVAL_DECIMAL) {
         a->cell[0]->type = LVAL_BOOL;
-        a->cell[0]->num.li = (long)a->cell[0]->num.f;
+        a->cell[0]->i = (long)a->cell[0]->f;
     }
     if (a->cell[0]->type == LVAL_INTEGER) a->cell[0]->type = LVAL_BOOL;
  
@@ -1231,7 +1231,7 @@ static Lval_t* builtin_if(Lenv_t* e, Lval_t* a) {
     a->cell[1]->type = LVAL_SEXPR;
     a->cell[2]->type = LVAL_SEXPR;
 
-    Lval_t* x = a->cell[0]->num.li ? lval_eval(e, lval_pop(a, 1))
+    Lval_t* x = a->cell[0]->i ? lval_eval(e, lval_pop(a, 1))
                                    : lval_eval(e, lval_pop(a, 2));
     lval_del(a);
     return x;
@@ -1475,10 +1475,10 @@ static Lval_t* lval_copy(Lval_t* v) {
         }
 
         case LVAL_DLL:       x->dll = v->dll; break;
-        case LVAL_DECIMAL:   x->num.f = v->num.f; break;
+        case LVAL_DECIMAL:   x->f = v->f; break;
 
         case LVAL_BOOL:
-        case LVAL_INTEGER:   x->num.li = v->num.li; break;
+        case LVAL_INTEGER:   x->i = v->i; break;
 
         case LVAL_STR: {
             x->str = arena_strdup(&arena, v->str);
@@ -1909,7 +1909,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 lval_del(out_type);
                 return val;
             } else if (val->type == LVAL_DECIMAL) {
-                long x = (long)val->num.f;
+                long x = (long)val->f;
                 lval_del(val);
                 lval_del(out_type);
                 return lval_create_long(x);
@@ -1931,7 +1931,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 lval_del(out_type);
                 return val;
             } else if (val->type == LVAL_INTEGER || val->type == LVAL_BOOL) {
-                double x = (double)val->num.li;
+                double x = (double)val->i;
                 lval_del(val);
                 lval_del(out_type);
                 return lval_create_double(x);
@@ -1950,7 +1950,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
 
         case C_STRING: {
             if (val->type == LVAL_INTEGER || val->type == LVAL_BOOL) {
-                long x = val->num.li;
+                long x = val->i;
                 size_t sz = snprintf(NULL, 0, "%li", x);
                 char* str = malloc(sz + 1);
                 snprintf(str, sz + 1, "%li", x);
@@ -1960,7 +1960,7 @@ static Lval_t* builtin_cast(Lenv_t* e, Lval_t* a) {
                 lval_del(out_type);
                 return ret;
             } else if (val->type == LVAL_DECIMAL) {
-                double x = val->num.f;
+                double x = val->f;
                 size_t sz = snprintf(NULL, 0, "%f", x);
                 char* str = malloc(sz + 1);
                 snprintf(str, sz + 1, "%f", x);

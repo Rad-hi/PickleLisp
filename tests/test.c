@@ -29,7 +29,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
         }
         case LVAL_BOOL:
         case LVAL_INTEGER: {
-            bool cond = val->num.li == expected.num.li;
+            bool cond = val->i == expected.i;
             PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
             if (!cond) exit(-1);
@@ -37,7 +37,7 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
             break;
         }
         case LVAL_DECIMAL: {
-            bool cond = almost_eq(val->num.f, expected.num.f); 
+            bool cond = almost_eq(val->f, expected.f); 
             PRINT_VERDICT(cond, test_name);
 #ifdef EXIT_ON_FAIL
             if (!cond) exit(-1);
@@ -65,9 +65,9 @@ static void assert_equal(Lval_t* val, Lval_t expected, char* test_name) {
             for (int i = 0; i < val->count; ++i) {
                 LVAL_e type = val->cell[i]->type; 
                 if (type == LVAL_INTEGER || type == LVAL_BOOL) {
-                    cond &= val->cell[i]->num.li == expected.cell[i]->num.li;
+                    cond &= val->cell[i]->i == expected.cell[i]->i;
                 } else if (type == LVAL_DECIMAL) {
-                    cond &= almost_eq(val->cell[i]->num.f, expected.cell[i]->num.f);
+                    cond &= almost_eq(val->cell[i]->f, expected.cell[i]->f);
                 } else {
                     fprintf(stderr, "Unsupported type in the QEXPR equality assertion!");
                     exit(69);
@@ -101,21 +101,21 @@ static Lval_t get_lval_err(char* msg) {
 static Lval_t get_lval_double(double value) {
     return (Lval_t){
         .type = LVAL_DECIMAL,
-        .num.f = value
+        .f = value
     };
 }
 
 static Lval_t get_lval_long(long value) {
     return (Lval_t){
         .type = LVAL_INTEGER,
-        .num.li = value
+        .i = value
     };
 }
 
 static Lval_t get_lval_bool(bool value) {
     return (Lval_t){
         .type = LVAL_BOOL,
-        .num.li = value
+        .i = value
     };
 }
 
@@ -129,7 +129,7 @@ static Lval_t get_lval_str(char* s) {
 static Lval_t get_lval_ok(void) {
     return (Lval_t){
         .type = LVAL_OK,
-        .num.li = 1,
+        .i = 1,
     };
 }
 

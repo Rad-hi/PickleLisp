@@ -66,11 +66,6 @@ typedef enum {
     LVAL_USER_TYPE,
 } LVAL_e;
 
-typedef union {
-    long li;
-    double f;
-} Numeric_u;
-
 // NOTE: might be better to use a hashmap here, gotta implement it though
 struct Lenv_t {
     Lenv_t* parent;
@@ -86,7 +81,10 @@ struct Lval_t {
 
     /* Lval_t can only represent one at a time */
     union {
-        Numeric_u num;
+        union {
+            long i;
+            double f;
+        };
         char* str;
         char* err;
         char* sym;
