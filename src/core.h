@@ -49,12 +49,6 @@ typedef struct Lenv_t Lenv_t;
 
 typedef Lval_t* (*Lbuiltin_t)(Lenv_t*, Lval_t*);
 
-typedef struct {
-    char** names;
-    int* lengths;
-    int count;
-} Builtins_record_t;
-
 typedef enum {
     LVAL_INTEGER,
     LVAL_DECIMAL,
