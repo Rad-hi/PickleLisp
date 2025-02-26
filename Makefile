@@ -27,8 +27,8 @@ CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
 
 LFLAGS = -ledit -lm -ldl -lffi
 
-INCLUDES = -I ./mpc -I ./libffi-3.4.6/include/
-SRCS = ./mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
+INCLUDES = -I ./thirdparty/mpc -I ./thirdparty/libffi-3.4.6/include/
+SRCS = ./thirdparty/mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 
 OBJS = $(SRCS:.c=.o)
 
