@@ -14,8 +14,13 @@
 ( extern raylib "DrawPixel" {Int Int Color} {Void} )
 ( extern raylib "DrawLine" {Int Int Int Int Color} {Void} );
 ( extern raylib "IsKeyPressed" {Int} {Int} )
+( extern raylib "DrawText" {String Int Int Int Color} {Void} )
+
+( def {KEY_P} 80 )
+( def {KEY_R} 82 )
 
 ( def {ZOZINGRAY}   (list 22 22 22 255) )
+( def {ZOZINLIGHT}  (list 55 55 55 255) )
 ( def {PICKLEGREEN} (list 133 161 106 255) )
 
 ( def {FPS} 30 )
@@ -23,11 +28,21 @@
 ( def {win_width} 960 )
 ( def {win_height} 480 )
 
-( def {KEY_P} 80 )
-( def {KEY_R} 82 )
-
 ( def {prev_pos} ( list 0 0 ) )
 ( def {pixel_mode} 0 )
+
+( fn { draw_msg _ } {
+    ( = {font_sz} 28 )
+    ( = {msg} "Move your cursor inside the window!" )
+    ( = {msg_len} ( len msg ) )
+    ( = {viz_msg_len} (* (- msg_len 1) (/ font_sz 2)) )
+
+    ( = {x} (/ (- win_width viz_msg_len ) 2) )
+    ( = {y} (/ (- win_height font_sz) 2) )
+    ( DrawText msg x y font_sz ZOZINLIGHT )
+    ( DrawText "Press [p] to change the drawing mode!" (+ x 20) (+ y 40) 23 ZOZINLIGHT )
+    ( DrawText "Press [r] to clear the screen!" (+ x 50) (+ y 80) 23 ZOZINLIGHT )
+})
 
 ( fn { loop func } {
 
@@ -38,7 +53,10 @@
 
             (
                 if ( == (IsKeyPressed KEY_R) 1)
-                { ( ClearBackground ZOZINGRAY ) }
+                {
+                    ( ClearBackground ZOZINGRAY )
+                    ( draw_msg {} )
+                }
                 { nil }
             )
 
@@ -77,5 +95,6 @@
 ( InitWindow win_width win_height title )
 ( ClearBackground ZOZINGRAY )
 ( SetTargetFPS FPS )
+( draw_msg {} )
 ( loop WindowShouldClose)
 ( CloseWindow {} )
