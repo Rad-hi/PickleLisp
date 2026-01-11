@@ -48,13 +48,13 @@ ffi_type* ffi_type_from_user_defined(CTypes_e* ctypes, int count) {
     // Ref: https://eli.thegreenplace.net/2013/03/04/flexible-runtime-interface-to-shared-libraries-with-libffi
 
     int n_types = count;
-    ffi_type** elements = malloc((n_types + 1) * sizeof(ffi_type*));
+    ffi_type** elements = PKL_MALLOC((n_types + 1) * sizeof(ffi_type*));
     for (int i = 0; i < n_types; ++i) {
         elements[i] = ctype_2_ffi_type(ctypes[i]);
     }
     elements[n_types] = NULL;
 
-    ffi_type *type = malloc(sizeof(ffi_type));
+    ffi_type *type = PKL_MALLOC(sizeof(ffi_type));
     type->size = 0;
     type->alignment = 0;
     type->type = FFI_TYPE_STRUCT;

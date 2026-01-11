@@ -6,6 +6,11 @@
 # 'make clean'  removes all .o and executable files
 #
 
+MIMALLOC_DIR := ./thirdparty/mimalloc
+MIMALLOC_BUILD := $(MIMALLOC_DIR)/build
+LIBFFI_DIR := ./thirdparty/libffi-3.4.6
+MPC_DIR := ./thirdparty/mpc
+
 CC = gcc
 
 CFLAGS = -std=c99
@@ -25,36 +30,44 @@ CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
 # CFLAGS += -DVERBOSE_ADD_  # for the add library to print its input
 
 
-LFLAGS = -ledit -lm -ldl -lffi
+# Whether to use mimalloc allocator, or default one
+# Ref: https://microsoft.github.io/mimalloc/index.html
+# Ref: https://github.com/microsoft/mimalloc
+# Comment this if you don't want the language to use mimalloc
+#
+CFLAGS += -DUSE_MIMALLOC
 
-INCLUDES = -I ./thirdparty/mpc -I ./thirdparty/libffi-3.4.6/include/
-SRCS = ./thirdparty/mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
+LFLAGS = -ledit -lm -ldl -lffi -L $(MIMALLOC_BUILD) -l:libmimalloc.a -lpthread
+
+INCLUDES = -I $(MPC_DIR) -I $(LIBFFI_DIR)/include/ -I $(MIMALLOC_DIR)/include
+SRCS = $(MPC_DIR)/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 
 OBJS = $(SRCS:.c=.o)
 
 MAIN = pickle
-TEST = test
-ADD_LIB = tests/libadd.so
-
+TEST = test_picklelisp
 
 .PHONY: clean, all
 
 all: $(MAIN) $(TEST)
 
+mimalloc:
+	mkdir -p $(MIMALLOC_BUILD)
+	cmake -S $(MIMALLOC_DIR) -B $(MIMALLOC_BUILD)
+	$(MAKE) -C $(MIMALLOC_BUILD) -j$(shell nproc)
 
-$(MAIN): $(OBJS)
+$(MAIN): $(OBJS) mimalloc
 	$(CC) $(CFLAGS) $(INCLUDES) ./src/pickle_lisp.c -o $(MAIN) $(OBJS) $(LFLAGS)
 
-$(TEST): $(ADD_LIB) $(OBJS)
+$(TEST): addlib $(OBJS) mimalloc
 	$(CC) $(CFLAGS) $(INCLUDES) ./tests/test.c -o $(TEST) $(OBJS) $(LFLAGS) -L./tests/ -l add
 
-$(ADD_LIB):
+addlib:
 	$(CC) $(CFLAGS) ./tests/add.c -c -fPIC -o ./tests/add.o
-	$(CC) $(CFLAGS) ./tests/add.o -shared -o ./$(ADD_LIB)
-
+	$(CC) $(CFLAGS) ./tests/add.o -shared -o ./tests/libadd.so
 
 .c.o:
 	$(CC) $(CFLAGS) $(INCLUDES) -c $<  -o $@
 
 clean:
-	$(RM) ./src/*.o ./tests/*.o *~ $(MAIN) $(TEST) $(ADD_LIB)
+	$(RM) ./src/*.o ./tests/*.o *~ $(MAIN) $(TEST) addlib

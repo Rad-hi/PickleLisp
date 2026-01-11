@@ -9,23 +9,9 @@
 #include "core.h"
 #include "mpc.h"
 
-#ifdef _WIN32
-    #define IN_BUF_SZ  2048
-    static char buffer[IN_BUF_SZ];
-    char* readline(char* prompt) {
-        fputs(prompt, stdout);
-        fgets(buffer, IN_BUF_SZ, stdin);
-        char* ret = malloc(strlen(buffer) + 1);
-        strcpy(ret, buffer);
-        ret[strlen(ret) - 1] = '\0';
-        return ret;
-    }
-    void add_history(char* unused) {}
-#else
-    #include <editline/readline.h>
-    #include <editline/history.h>
-    #include <linux/limits.h>
-#endif // _WIN32
+#include <editline/readline.h>
+#include <editline/history.h>
+#include <linux/limits.h>
 
 #define PRINT_AST    0
 
@@ -67,7 +53,7 @@ int main(int argc, char** argv) {
                 mpc_err_print(r.error);
                 mpc_err_delete(r.error);
             }
-            free(buf);
+            PKL_FREE(buf);
         }
     }
 
