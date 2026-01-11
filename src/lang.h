@@ -7,11 +7,7 @@
 #include "core.h"
 #include "mpc.h"
 
-#ifdef _WIN32
-    // TODO: test on windows and figure out what to include
-#else
-    #include <linux/limits.h>
-#endif // _WIN32
+#include <linux/limits.h>
 
 void create_vm(Lenv_t** e, mpc_parser_t** lang);
 void cleanup(void);
