@@ -1,5 +1,7 @@
+build/
 .vscode/
 *.o
 pickle
-test
+test_picklelisp
 *.so
+

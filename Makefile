@@ -6,6 +6,11 @@
 # 'make clean'  removes all .o and executable files
 #
 
+MIMALLOC_DIR := ./thirdparty/mimalloc
+MIMALLOC_BUILD := $(MIMALLOC_DIR)/build
+LIBFFI_DIR := ./thirdparty/libffi-3.4.6
+MPC_DIR := ./thirdparty/mpc
+
 CC = gcc
 
 CFLAGS = -std=c99
@@ -32,40 +37,37 @@ CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
 #
 CFLAGS += -DUSE_MIMALLOC
 
-# TODO: clone and build mimalloc using cmake
-# currently, it's shipped with the libraries (dynamic & static) built already
-# Ref if you wanna build yourself: https://github.com/microsoft/mimalloc/blob/main/readme.md#linux-macos-bsd-etc
-#
-LFLAGS = -ledit -lm -ldl -lffi -L ./thirdparty/mimalloc/build -l:libmimalloc.a -lpthread
+LFLAGS = -ledit -lm -ldl -lffi -L $(MIMALLOC_BUILD) -l:libmimalloc.a -lpthread
 
-INCLUDES = -I ./thirdparty/mpc -I ./thirdparty/libffi-3.4.6/include/ -I ./thirdparty/mimalloc/include
-SRCS = ./thirdparty/mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
+INCLUDES = -I $(MPC_DIR) -I $(LIBFFI_DIR)/include/ -I $(MIMALLOC_DIR)/include
+SRCS = $(MPC_DIR)/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 
 OBJS = $(SRCS:.c=.o)
 
 MAIN = pickle
-TEST = test
-ADD_LIB = tests/libadd.so
-
+TEST = test_picklelisp
 
 .PHONY: clean, all
 
 all: $(MAIN) $(TEST)
 
+mimalloc:
+	mkdir -p $(MIMALLOC_BUILD)
+	cmake -S $(MIMALLOC_DIR) -B $(MIMALLOC_BUILD)
+	$(MAKE) -C $(MIMALLOC_BUILD) -j$(shell nproc)
 
-$(MAIN): $(OBJS)
+$(MAIN): $(OBJS) mimalloc
 	$(CC) $(CFLAGS) $(INCLUDES) ./src/pickle_lisp.c -o $(MAIN) $(OBJS) $(LFLAGS)
 
-$(TEST): $(ADD_LIB) $(OBJS)
+$(TEST): addlib $(OBJS) mimalloc
 	$(CC) $(CFLAGS) $(INCLUDES) ./tests/test.c -o $(TEST) $(OBJS) $(LFLAGS) -L./tests/ -l add
 
-$(ADD_LIB):
+addlib:
 	$(CC) $(CFLAGS) ./tests/add.c -c -fPIC -o ./tests/add.o
-	$(CC) $(CFLAGS) ./tests/add.o -shared -o ./$(ADD_LIB)
-
+	$(CC) $(CFLAGS) ./tests/add.o -shared -o ./tests/libadd.so
 
 .c.o:
 	$(CC) $(CFLAGS) $(INCLUDES) -c $<  -o $@
 
 clean:
-	$(RM) ./src/*.o ./tests/*.o *~ $(MAIN) $(TEST) $(ADD_LIB)
+	$(RM) ./src/*.o ./tests/*.o *~ $(MAIN) $(TEST) addlib

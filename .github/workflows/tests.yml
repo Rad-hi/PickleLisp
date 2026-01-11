@@ -19,4 +19,4 @@ jobs:
           make
       - name: Run tests
         run: |
-          ./test
+          ./test_picklelisp
