@@ -25,9 +25,20 @@ CFLAGS += -DEXIT_ON_FAIL  # for tests to exit on fail
 # CFLAGS += -DVERBOSE_ADD_  # for the add library to print its input
 
 
-LFLAGS = -ledit -lm -ldl -lffi
+# Whether to use mimalloc allocator, or default one
+# Ref: https://microsoft.github.io/mimalloc/index.html
+# Ref: https://github.com/microsoft/mimalloc
+# Comment this if you don't want the language to use mimalloc
+#
+CFLAGS += -DUSE_MIMALLOC
 
-INCLUDES = -I ./thirdparty/mpc -I ./thirdparty/libffi-3.4.6/include/
+# TODO: clone and build mimalloc using cmake
+# currently, it's shipped with the libraries (dynamic & static) built already
+# Ref if you wanna build yourself: https://github.com/microsoft/mimalloc/blob/main/readme.md#linux-macos-bsd-etc
+#
+LFLAGS = -ledit -lm -ldl -lffi -L ./thirdparty/mimalloc/build -l:libmimalloc.a -lpthread
+
+INCLUDES = -I ./thirdparty/mpc -I ./thirdparty/libffi-3.4.6/include/ -I ./thirdparty/mimalloc/include
 SRCS = ./thirdparty/mpc/mpc.c ./src/core.c ./src/lang.c ./src/ctypes.c
 
 OBJS = $(SRCS:.c=.o)
